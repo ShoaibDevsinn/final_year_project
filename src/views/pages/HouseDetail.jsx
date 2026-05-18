@@ -296,7 +296,7 @@ export default function HouseDetails() {
                 to="/predict"
                 className="w-full block text-center px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:shadow-lg transition-all font-medium"
               >
-                Predict Similar House Price
+                View More
               </Link>
             </div>
           </div>

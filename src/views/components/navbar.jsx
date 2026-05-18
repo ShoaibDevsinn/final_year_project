@@ -11,6 +11,7 @@ export const ROUTES = {
   HISTORICAL_RATES: '/historical-rates',
   PROFILE: '/profile',
   ADMIN: '/admin',
+  SIGN_IN: '/sign_in',
 };
 
 export function Navbar() {
@@ -24,6 +25,7 @@ export function Navbar() {
     { path: ROUTES.PREDICT, label: 'Price Predictor', icon: TrendingUp },
     { path: ROUTES.HISTORICAL_RATES, label: 'Historical Rates', icon: History },
     { path: ROUTES.PROFILE, label: 'Profile', icon: User },
+    { path: ROUTES.SIGN_IN, label: 'Sign In', icon: User },
     // { path: ROUTES.ADMIN, label: 'Admin', icon: Shield },
   ], []);
 

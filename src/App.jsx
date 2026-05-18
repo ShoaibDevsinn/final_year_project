@@ -8,6 +8,8 @@ import HousePricePredictor from './views/pages/PricePredictor';
 import HistoricalRates from './views/pages/HistoricalRates';
 import Profile from './views/pages/Profile';
 import UserProfile from './views/pages/Profile';
+import SignIn from './views/pages/SignIn';
+import SignUp from './views/pages/SignUp';
 
 function App() {
   return (
@@ -28,6 +30,8 @@ function App() {
         />   
         <Route path="//historical-rates" element={<HistoricalRates />} />  
         <Route path="/profile" element={<UserProfile />} /> {/* Baaki routes */}
+         <Route path="/sign_in" element={<SignIn  />} />
+         <Route path="/sign_up" element={<SignUp  />} />
       </Routes>
     </BrowserRouter>
   );

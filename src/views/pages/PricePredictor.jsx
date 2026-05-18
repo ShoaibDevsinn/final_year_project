@@ -1,7 +1,12 @@
 // src/views/pages/HousePricePredictor.jsx
 import { useState } from 'react';
 import { Toaster, toast } from 'sonner';
-import { TrendingUp, Home, Sparkles, CheckCircle, Bed, Bath, Calendar, Ruler, MapPin } from 'lucide-react';
+import { 
+  TrendingUp, Home, Sparkles, CheckCircle, Bed, Bath, Calendar, Ruler, MapPin,
+  Users, Archive, Gem, Layers, Building2, Dumbbell, BookOpen, Sofa, 
+  UtensilsCrossed, Trees, Waves, Zap, Armchair, CornerDownRight, 
+  Activity, ClipboardList, SquareParking
+} from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Navbar } from '../components/navbar';
 import { usePredictionViewModel } from '../../viewmodels/usePredictionViewModel';
@@ -13,12 +18,25 @@ const HousePricePredictor = () => {
     marla: '',
     bedrooms: '',
     bathrooms: '',
-    kitchen: '',
-    yearBuilt: '',
-    hasGarage: false,
-    hasGarden: false,
-    hasRoofAccess: false,
+    number_of_floors: '',
+    severant_quarters: '',
+    store_rooms: '',
+    kitchens: '',
+    built_year: '',
+    servant_quarters: 0,
+    store_rooms: 0,
     furnished: false,
+    gym: false,
+    study_room: false,
+    drawing_room: false,
+    dining_room: false,
+    lawn_garden: false,
+    swimming_pool: false,
+    electricity_backup: false,
+    lounge_sitting: false,
+    is_corner: false,
+    facing_park: false,
+    num_floors: '',
   });
 
   const [prediction, setPrediction] = useState(null);
@@ -35,10 +53,19 @@ const HousePricePredictor = () => {
     'Wapda Town', 'Cantt', 'Iqbal Town', 'Allama Iqbal Town', 'Township'
   ];
 
+  // Helper function to handle numeric input changes with validation
+  const handleNumericChange = (field, min, max) => (e) => {
+    let value = parseInt(e.target.value);
+    if (isNaN(value)) value = 0;
+    if (value < min) value = min;
+    if (value > max) value = max;
+    setHouseData(prev => ({ ...prev, [field]: value }));
+  };
+
   const handlePredict = async () => {
     // Validation
     if (!houseData.area || !houseData.marla || !houseData.bedrooms || 
-        !houseData.bathrooms || !houseData.kitchen || !houseData.yearBuilt) {
+        !houseData.bathrooms || !houseData.kitchens || !houseData.built_year) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -55,17 +82,32 @@ const HousePricePredictor = () => {
         marla: parseInt(houseData.marla),
         bedrooms: parseInt(houseData.bedrooms),
         bathrooms: parseInt(houseData.bathrooms),
-        kitchen: parseInt(houseData.kitchen),
+        number_of_floors: parseInt(houseData.number_of_floors),
+        severant_quarters: parseInt(houseData.severant_quarters),
+        store_rooms: parseInt(houseData.store_rooms),   
+        kitchen: parseInt(houseData.kitchens),
         hasGarage: houseData.hasGarage,
-        hasGarden: houseData.hasGarden,
+        hasGarden: houseData.lawn_garden,
         hasRoofAccess: houseData.hasRoofAccess,
         furnished: houseData.furnished,
-        price: 0, // Will be calculated
+        price: 0,
         pricePerMarla: 0,
         description: '',
         image: '',
-        yearBuilt: parseInt(houseData.yearBuilt),
-        features: []
+        yearBuilt: parseInt(houseData.built_year),
+        features: [],
+        servant_quarters: houseData.servant_quarters,
+        store_rooms: houseData.store_rooms,
+        gym: houseData.gym,
+        study_room: houseData.study_room,
+        drawing_room: houseData.drawing_room,
+        dining_room: houseData.dining_room,
+        swimming_pool: houseData.swimming_pool,
+        electricity_backup: houseData.electricity_backup,
+        lounge_sitting: houseData.lounge_sitting,
+        is_corner: houseData.is_corner,
+        facing_park: houseData.facing_park,
+        num_floors: houseData.num_floors,
       };
       
       const result = await getPrediction(mockHouse);
@@ -148,7 +190,7 @@ const HousePricePredictor = () => {
             <div className="p-6 space-y-5">
               
               {/* Area/Location Input */}
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                   <MapPin className="w-4 h-4 text-emerald-600" />
                   Location / Area *
@@ -156,7 +198,7 @@ const HousePricePredictor = () => {
                 <select
                   value={houseData.area}
                   onChange={(e) => setHouseData(prev => ({ ...prev, area: e.target.value }))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 caret-emerald-600 transition-all"
                 >
                   <option value="">Select Area</option>
                   {lahoreAreas.map(area => (
@@ -165,16 +207,16 @@ const HousePricePredictor = () => {
                 </select>
               </div>
 
-              {/* Marla Size */}
-              <div className="space-y-2">
+              {/* Property Size */}
+              <div className="space-y-3">
                 <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                   <Ruler className="w-4 h-4 text-emerald-600" />
-                  Marla Size *
+                  Property Size (Marla) *
                 </label>
                 <select
                   value={houseData.marla}
                   onChange={(e) => setHouseData(prev => ({ ...prev, marla: e.target.value }))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 caret-emerald-600 transition-all"
                 >
                   <option value="">Select Marla</option>
                   {[3, 4, 5, 6, 7, 8, 10, 12, 15, 20].map(num => (
@@ -183,9 +225,9 @@ const HousePricePredictor = () => {
                 </select>
               </div>
 
-              {/* Bedrooms and Bathrooms */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
+              {/* Rooms */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-3">
                   <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                     <Bed className="w-4 h-4 text-emerald-600" />
                     Bedrooms *
@@ -193,16 +235,16 @@ const HousePricePredictor = () => {
                   <select
                     value={houseData.bedrooms}
                     onChange={(e) => setHouseData(prev => ({ ...prev, bedrooms: e.target.value }))}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 caret-emerald-600 transition-all"
                   >
                     <option value="">Select</option>
                     {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
-                      <option key={num} value={num}>{num} {num === 1 ? 'Bed' : 'Beds'}</option>
+                      <option key={num} value={num}>{num}</option>
                     ))}
                   </select>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                     <Bath className="w-4 h-4 text-emerald-600" />
                     Bathrooms *
@@ -210,83 +252,116 @@ const HousePricePredictor = () => {
                   <select
                     value={houseData.bathrooms}
                     onChange={(e) => setHouseData(prev => ({ ...prev, bathrooms: e.target.value }))}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 caret-emerald-600 transition-all"
                   >
                     <option value="">Select</option>
                     {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
-                      <option key={num} value={num}>{num} {num === 1 ? 'Bath' : 'Baths'}</option>
+                      <option key={num} value={num}>{num}</option>
                     ))}
                   </select>
                 </div>
-              </div>
 
-              {/* Kitchen and Year Built */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                     <Home className="w-4 h-4 text-emerald-600" />
-                    Kitchen *
+                    Kitchens *
                   </label>
                   <select
-                    value={houseData.kitchen}
-                    onChange={(e) => setHouseData(prev => ({ ...prev, kitchen: e.target.value }))}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                    value={houseData.kitchens}
+                    onChange={(e) => setHouseData(prev => ({ ...prev, kitchens: e.target.value }))}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 caret-emerald-600 transition-all"
                   >
                     <option value="">Select</option>
                     {[1, 2, 3].map(num => (
-                      <option key={num} value={num}>{num} Kitchen{num > 1 ? 's' : ''}</option>
+                      <option key={num} value={num}>{num}</option>
                     ))}
                   </select>
                 </div>
-
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                    <Calendar className="w-4 h-4 text-emerald-600" />
-                    Year Built *
-                  </label>
-                  <input
-                    type="number"
-                    min="1980"
-                    max="2024"
-                    placeholder="e.g., 2020"
-                    value={houseData.yearBuilt}
-                    onChange={(e) => setHouseData(prev => ({ ...prev, yearBuilt: e.target.value }))}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
-                  />
-                </div>
               </div>
 
-              {/* Additional Features */}
+              {/* Construction */}
+             <div className="grid grid-cols-2 gap-4">
+  <div className="space-y-3">
+    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+      <Calendar className="w-4 h-4 text-emerald-600" />
+      Year Built *
+    </label>
+    <input
+      type="number"
+      min="2000"
+      max="2024"
+      placeholder="e.g., 2020"
+      value={houseData.built_year}
+      onChange={(e) =>
+        setHouseData((prev) => ({
+          ...prev,
+          built_year: e.target.value,
+        }))
+      }
+      className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 caret-emerald-600 transition-all"
+    />
+  </div>
+
+  <div className="space-y-3">
+    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+      <Building2 className="w-4 h-4 text-emerald-600" />
+      Number of Floors
+    </label>
+     <select
+                    value={houseData.number_of_floors}
+                    onChange={(e) => setHouseData(prev => ({ ...prev, number_of_floors: e.target.value }))}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 caret-emerald-600 transition-all"
+                  >
+                    <option value="">Select</option>
+                    {[1, 2, 3].map(num => (
+                      <option key={num} value={num}>{num}</option>
+                    ))}
+                  </select>
+  </div>
+</div>
+              {/* Additional Rooms - With Icons */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                      <Users className="w-4 h-4 text-emerald-600" />
+                      Servant Quarters 
+                    </label>
+                   <select
+                    value={houseData.severant_quarters}
+                    onChange={(e) => setHouseData(prev => ({ ...prev, severant_quarters: e.target.value }))}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 caret-emerald-600 transition-all"
+                  >
+                    <option value="">Select</option>
+                    {[1, 2, 3].map(num => (
+                      <option key={num} value={num}>{num}</option>
+                    ))}
+                  </select>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                      <Archive className="w-4 h-4 text-emerald-600" />
+                      Store Rooms
+                    </label>
+                   <select
+                    value={houseData.store_rooms}
+                    onChange={(e) => setHouseData(prev => ({ ...prev, store_rooms: e.target.value }))}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 caret-emerald-600 transition-all"
+                  >
+                    <option value="">Select</option>
+                    {[1, 2, 3].map(num => (
+                      <option key={num} value={num}>{num}</option>
+                    ))}
+                  </select>
+                  </div>
+                </div>
+
+              {/* Amenities - With Icons */}
               <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">Additional Features</label>
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <Gem className="w-4 h-4 text-emerald-600" />
+                  Amenities
+                </label>
                 <div className="grid grid-cols-2 gap-3">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={houseData.hasGarage}
-                      onChange={(e) => setHouseData(prev => ({ ...prev, hasGarage: e.target.checked }))}
-                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
-                    />
-                    <span className="text-sm text-gray-700">Garage</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={houseData.hasGarden}
-                      onChange={(e) => setHouseData(prev => ({ ...prev, hasGarden: e.target.checked }))}
-                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
-                    />
-                    <span className="text-sm text-gray-700">Garden</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={houseData.hasRoofAccess}
-                      onChange={(e) => setHouseData(prev => ({ ...prev, hasRoofAccess: e.target.checked }))}
-                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
-                    />
-                    <span className="text-sm text-gray-700">Roof Access</span>
-                  </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -296,6 +371,117 @@ const HousePricePredictor = () => {
                     />
                     <span className="text-sm text-gray-700">Furnished</span>
                   </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={houseData.gym}
+                      onChange={(e) => setHouseData(prev => ({ ...prev, gym: e.target.checked }))}
+                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                    />
+                    {/* <Dumbbell className="w-3.5 h-3.5 text-emerald-500" /> */}
+                    <span className="text-sm text-gray-700">Gym</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={houseData.study_room}
+                      onChange={(e) => setHouseData(prev => ({ ...prev, study_room: e.target.checked }))}
+                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                    />
+                    {/* <BookOpen className="w-3.5 h-3.5 text-emerald-500" /> */}
+                    <span className="text-sm text-gray-700">Study Room</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={houseData.drawing_room}
+                      onChange={(e) => setHouseData(prev => ({ ...prev, drawing_room: e.target.checked }))}
+                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                    />
+                    {/* <Sofa className="w-3.5 h-3.5 text-emerald-500" /> */}
+                    <span className="text-sm text-gray-700">Drawing Room</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={houseData.dining_room}
+                      onChange={(e) => setHouseData(prev => ({ ...prev, dining_room: e.target.checked }))}
+                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                    />
+                    {/* <UtensilsCrossed className="w-3.5 h-3.5 text-emerald-500" /> */}
+                    <span className="text-sm text-gray-700">Dining Room</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={houseData.lawn_garden}
+                      onChange={(e) => setHouseData(prev => ({ ...prev, lawn_garden: e.target.checked }))}
+                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                    />
+                    {/* <Trees className="w-3.5 h-3.5 text-emerald-500" /> */}
+                    <span className="text-sm text-gray-700">Lawn / Garden</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={houseData.swimming_pool}
+                      onChange={(e) => setHouseData(prev => ({ ...prev, swimming_pool: e.target.checked }))}
+                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                    />
+                    {/* <Waves className="w-3.5 h-3.5 text-emerald-500" /> */}
+                    <span className="text-sm text-gray-700">Swimming Pool</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={houseData.electricity_backup}
+                      onChange={(e) => setHouseData(prev => ({ ...prev, electricity_backup: e.target.checked }))}
+                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                    />
+                    {/* <Zap className="w-3.5 h-3.5 text-emerald-500" /> */}
+                    <span className="text-sm text-gray-700">Electricity Backup</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={houseData.lounge_sitting}
+                      onChange={(e) => setHouseData(prev => ({ ...prev, lounge_sitting: e.target.checked }))}
+                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                    />
+                    {/* <Armchair className="w-3.5 h-3.5 text-emerald-500" /> */}
+                    <span className="text-sm text-gray-700">Lounge / Sitting Area</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Special Features - With Icons */}
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <Layers className="w-4 h-4 text-emerald-600" />
+                  Special Features
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={houseData.is_corner}
+                      onChange={(e) => setHouseData(prev => ({ ...prev, is_corner: e.target.checked }))}
+                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                    />
+                    {/* <CornerDownRight className="w-3.5 h-3.5 text-emerald-500" /> */}
+                    <span className="text-sm text-gray-700">Corner Plot</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={houseData.facing_park}
+                      onChange={(e) => setHouseData(prev => ({ ...prev, facing_park: e.target.checked }))}
+                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                    />
+                    {/* <SquareParking className="w-3.5 h-3.5 text-emerald-500" /> */}
+                    <span className="text-sm text-gray-700">Facing Park</span>
+                  </label>
+                 
                 </div>
               </div>
 
@@ -433,22 +619,24 @@ const HousePricePredictor = () => {
                   )}
 
                   {/* Selected Features Display */}
-                  {(houseData.hasGarage || houseData.hasGarden || houseData.hasRoofAccess || houseData.furnished) && (
+                  {(houseData.furnished || houseData.gym || houseData.study_room || houseData.drawing_room || houseData.dining_room || houseData.lawn_garden || houseData.swimming_pool || houseData.electricity_backup || houseData.lounge_sitting || houseData.is_corner || houseData.facing_park || houseData.servant_quarters > 0 || houseData.store_rooms > 0) && (
                     <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                      <h3 className="text-lg font-semibold mb-3 text-gray-800">Included Features</h3>
+                      <h3 className="text-lg font-semibold mb-3 text-gray-800">Selected Features</h3>
                       <div className="flex flex-wrap gap-2">
-                        {houseData.hasGarage && (
-                          <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Garage</span>
-                        )}
-                        {houseData.hasGarden && (
-                          <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Garden</span>
-                        )}
-                        {houseData.hasRoofAccess && (
-                          <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Roof Access</span>
-                        )}
-                        {houseData.furnished && (
-                          <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Furnished</span>
-                        )}
+                        {houseData.servant_quarters > 0 && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">{houseData.servant_quarters} Servant Quarters</span>}
+                        {houseData.store_rooms > 0 && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">{houseData.store_rooms} Store Rooms</span>}
+                        {houseData.furnished && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Furnished</span>}
+                        {houseData.gym && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Gym</span>}
+                        {houseData.study_room && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Study Room</span>}
+                        {houseData.drawing_room && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Drawing Room</span>}
+                        {houseData.dining_room && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Dining Room</span>}
+                        {houseData.lawn_garden && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Lawn/Garden</span>}
+                        {houseData.swimming_pool && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Swimming Pool</span>}
+                        {houseData.electricity_backup && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Electricity Backup</span>}
+                        {houseData.lounge_sitting && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Lounge/Sitting</span>}
+                        {houseData.is_corner && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Corner Plot</span>}
+                        {houseData.facing_park && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Facing Park</span>}
+                        {houseData.num_floors && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">{houseData.num_floors} Floors</span>}
                       </div>
                     </div>
                   )}
