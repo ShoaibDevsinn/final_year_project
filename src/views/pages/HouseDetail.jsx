@@ -3,8 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { Navbar } from '../components/navbar';
 import { ArrowLeft, MapPin, Bed, Bath, Home, Calendar, CheckCircle } from 'lucide-react';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
-import { useHouseDetailViewModel } from '../../viewmodels/useHouseDetailViewModel';
-import { useHouseListViewModel } from '../../viewmodels/useHouseListViewModel';
+import { useHouseDetailViewModel } from '../../viewmodels/useHouseDetailViewModel.js';
 
 export default function HouseDetails() {
   const { id } = useParams();
@@ -22,12 +21,12 @@ export default function HouseDetails() {
   } = useHouseDetailViewModel(id);
   
   // ✅ Get all houses for similar properties (optional)
-  const { houses: allHouses } = useHouseListViewModel();
+  // const { houses: allHouses } = useHouseListViewModel();
   
-  // Get similar houses (same area, similar marla)
-  const similarHouses = allHouses
-    .filter(h => h.id !== id && h.area === house?.area && Math.abs(h.marla - (house?.marla || 0)) <= 3)
-    .slice(0, 3);
+  // // Get similar houses (same area, similar marla)
+  // const similarHouses = allHouses
+  //   .filter(h => h.id !== id && h.area === house?.area && Math.abs(h.marla - (house?.marla || 0)) <= 3)
+  //   .slice(0, 3);
 
   const imageUrls = [
     'https://images.unsplash.com/photo-1622015663381-d2e05ae91b72?w=500',
@@ -208,7 +207,7 @@ export default function HouseDetails() {
             </div>
 
             {/* Similar Properties Section */}
-            {similarHouses.length > 0 && (
+            {/* {similarHouses.length > 0 && (
               <div className="bg-white rounded-xl shadow-lg p-6">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Similar Properties</h2>
                 <div className="grid md:grid-cols-3 gap-4">
@@ -236,7 +235,7 @@ export default function HouseDetails() {
                   ))}
                 </div>
               </div>
-            )}
+            )} */}
           </div>
 
           {/* Sidebar */}
@@ -245,21 +244,15 @@ export default function HouseDetails() {
               <div className="mb-6">
                 <div className="text-sm text-gray-600 mb-1">Total Price</div>
                 <div className="text-4xl font-bold text-emerald-600 mb-2">
-                  PKR {(house.price / 10000000).toFixed(2)} Cr
-                </div>
-                <div className="text-lg text-gray-600">
-                  PKR {formatNumber(house.price)} 
-                </div>
+  {formatPrice(house.price)}
+</div>
               </div>
 
               <div className="border-t border-gray-200 pt-4 mb-6">
                 <div className="text-sm text-gray-600 mb-1">Per Marla Rate</div>
-                <div className="text-2xl font-bold text-teal-600">
-                  PKR {(house.pricePerMarla / 100000).toFixed(1)} Lakh
-                </div>
-                <div className="text-sm text-gray-500 mt-1">
-                  {(house.pricePerMarla / 1000).toFixed(0)} per sq ft approx
-                </div>
+               <div className="text-2xl font-bold text-teal-600">
+  {formatPrice(house.pricePerMarla)}
+</div>
               </div>
 
               <div className="border-t border-gray-200 pt-4 mb-6">

@@ -5,7 +5,7 @@ import { Search, Filter, MapPin, Bed, Bath, Home as HomeIcon, DollarSign, Trendi
 import { motion, AnimatePresence } from "framer-motion";
 import { Navbar } from '../components/navbar';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
-import { useHouseListViewModel } from '../../viewmodels/useHouseListViewModel';
+import { useHouseListViewModel } from '../../viewmodels/useHouseListViewModel.js';
 import { toast, Toaster } from 'sonner';
 
 export default function Listings() {
@@ -451,21 +451,31 @@ export default function Listings() {
           </motion.h2>
 
           {filteredHouses.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="text-center py-16 bg-white rounded-2xl shadow-lg"
-            >
-              <HomeIcon className="w-20 h-20 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600 text-xl mb-4">No properties found matching your criteria</p>
-              <button
-                onClick={resetAllFilters}
-                className="text-emerald-600 hover:text-emerald-700 font-medium text-lg"
-              >
-                Clear Filters
-              </button>
-            </motion.div>
-          ) : (
+  allHouses.length === 0 ? (
+    // Case 1: No properties in database at all
+    <div className="text-center py-16 bg-white rounded-2xl shadow-lg">
+      <div className="inline-block mb-4">
+        <HomeIcon className="w-20 h-20 text-gray-400 mx-auto" />
+      </div>
+      <p className="text-gray-500 text-2xl mb-2">No properties available</p>
+      <p className="text-gray-400">Check back later for new listings</p>
+    </div>
+  ) : (
+    // Case 2: Filters applied but no matches
+    <div className="text-center py-16 bg-white rounded-2xl shadow-lg">
+      <div className="inline-block mb-4">
+        <HomeIcon className="w-20 h-20 text-gray-400 mx-auto" />
+      </div>
+      <p className="text-gray-500 text-2xl mb-4">No properties found matching your criteria</p>
+      <button
+        onClick={resetAllFilters}
+        className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
+      >
+        Clear Filters
+      </button>
+    </div>
+  )
+) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
               {filteredHouses.map((house, index) => (
                 <motion.div

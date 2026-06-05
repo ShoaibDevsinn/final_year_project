@@ -1,48 +1,211 @@
 // src/views/pages/HistoricalRates.jsx
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Navbar } from '../components/navbar';
 import { History, TrendingUp, BarChart3, LineChart as LineChartIcon, Activity } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast, Toaster } from 'sonner';
-import { MOCK_HISTORICAL_RATES } from '../../data/mock/HistoricalRates';
-import { LAHORE_AREAS } from '../../constants/LahoreData';
+// import { MOCK_HISTORICAL_RATES } from '../../data/mock/HistoricalRates';
+// import { LAHORE_AREAS } from '../../constants/LahoreData';
+import { historicalRatesService } from '../../services/services';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
   ResponsiveContainer, Area, AreaChart 
 } from 'recharts';
 
 export default function HistoricalRates() {
-  const [selectedArea, setSelectedArea] = useState('DHA Phase 5');
-  const [selectedMarla, setSelectedMarla] = useState(10);
+const [selectedArea, setSelectedArea] = useState('');
+const [selectedLocationId, setSelectedLocationId] = useState('');
+const [selectedMarla, setSelectedMarla] = useState(10);
+const [areas, setAreas] = useState([]);
+const [ratesData, setRatesData] = useState([]);
+const [loading, setLoading] = useState(true);
 
-  const marlaOptions = [3, 5, 7, 8, 10, 12, 15, 20];
-
+const marlaOptions = [5, 10, 20];
   // Filter data for selected area and marla
-  const filteredData = useMemo(() => {
-    return MOCK_HISTORICAL_RATES.filter(
-      (rate) => rate.area === selectedArea && rate.marlaSize === selectedMarla
-    );
-  }, [selectedArea, selectedMarla]);
 
-  // If no data, show default data for the area
-  const displayData = useMemo(() => {
-    if (filteredData.length > 0) {
-      return filteredData;
+  useEffect(() => {
+  fetchAreas();
+}, []);
+
+useEffect(() => {
+  if (selectedLocationId) {
+    fetchRatesForArea();
+  }
+}, [selectedLocationId, selectedMarla]);
+
+const fetchAreas = async () => {
+  try {
+    setLoading(true);
+    const response = await historicalRatesService.getLocations();
+    console.log('Locations response:', response);
+    
+    let locationsList = [];
+    if (response.data && Array.isArray(response.data)) {
+      locationsList = response.data;
+    } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+      locationsList = response.data.data;
+    } else if (Array.isArray(response)) {
+      locationsList = response;
     }
-    return MOCK_HISTORICAL_RATES.filter((rate) => rate.area === selectedArea);
-  }, [filteredData, selectedArea]);
+    
+    setAreas(locationsList);
+    // REMOVED: Auto-selection of first location
+    // Now location is empty until user selects one
+  } catch (error) {
+    console.error('Error fetching locations:', error);
+    toast.error('Failed to load locations');
+  } finally {
+    setLoading(false);
+  }
+};
+
+const fetchRatesForArea = async () => {
+  if (!selectedLocationId) return;
+  
+  try {
+    setLoading(true);
+    // Get location details with yearly data
+    const locationDetail = await historicalRatesService.getLocationDetail(selectedLocationId);
+    console.log('Location detail response:', locationDetail);
+    
+    let yearlyData = {};
+    let locationInfo = null;
+    
+    // Extract yearly data from different response structures
+    if (locationDetail.data && locationDetail.data.data && locationDetail.data.data.yearly_data) {
+      yearlyData = locationDetail.data.data.yearly_data;
+      locationInfo = locationDetail.data.data;
+    } else if (locationDetail.data && locationDetail.data.yearly_data) {
+      yearlyData = locationDetail.data.yearly_data;
+      locationInfo = locationDetail.data;
+    } else if (locationDetail.yearly_data) {
+      yearlyData = locationDetail.yearly_data;
+      locationInfo = locationDetail;
+    } else if (locationDetail.data && Array.isArray(locationDetail.data.years)) {
+      // If years is an array
+      const yearsArray = locationDetail.data.years;
+      yearlyData = {};
+      yearsArray.forEach(item => {
+        yearlyData[item.year] = item;
+      });
+    }
+    
+    console.log('Yearly data extracted:', yearlyData);
+    
+    // Format data for charts - ensure year is properly set
+    const formattedData = [];
+    
+    for (const [yearKey, dataValue] of Object.entries(yearlyData)) {
+      // Get the actual year number
+      const yearNum = parseInt(yearKey);
+      if (isNaN(yearNum)) continue;
+      
+      let price = 0;
+      let perMarlaRate = 0;
+      let growthRate = 0;
+      
+      // Map marla size to correct field
+      if (selectedMarla === 5) {
+        price = dataValue.price_5_marla || dataValue.price || dataValue.average_price || 0;
+        perMarlaRate = dataValue.per_marla_rate_5 || dataValue.per_marla_rate || dataValue.price_per_marla || 0;
+        growthRate = dataValue.growth_percentage_5 || dataValue.growth_rate || 0;
+      } else if (selectedMarla === 10) {
+        price = dataValue.price_10_marla || dataValue.price || dataValue.average_price || 0;
+        perMarlaRate = dataValue.per_marla_rate_10 || dataValue.per_marla_rate || dataValue.price_per_marla || 0;
+        growthRate = dataValue.growth_percentage_10 || dataValue.growth_rate || 0;
+      } else if (selectedMarla === 20) {
+        price = dataValue.price_1_kanal || dataValue.price || dataValue.average_price || 0;
+        perMarlaRate = dataValue.per_marla_rate_1k || dataValue.per_marla_rate || dataValue.price_per_marla || 0;
+        growthRate = dataValue.growth_percentage_1k || dataValue.growth_rate || 0;
+      } else {
+        price = dataValue.average_price || dataValue.price || 0;
+        perMarlaRate = dataValue.price_per_marla || dataValue.per_marla_rate || 0;
+        growthRate = dataValue.growth_rate || 0;
+      }
+      
+      formattedData.push({
+        year: yearNum,  // IMPORTANT: Set the year number here
+        averagePrice: parseFloat(price),
+        pricePerMarla: parseFloat(perMarlaRate),
+        growthRate: parseFloat(growthRate)
+      });
+    }
+    
+    // Sort by year
+    formattedData.sort((a, b) => a.year - b.year);
+    
+    console.log('Formatted data for charts:', formattedData);
+    setRatesData(formattedData);
+    
+    if (formattedData.length === 0) {
+      toast.warning('No data available for this marla size');
+    }
+  } catch (error) {
+    console.error('Error fetching rates:', error);
+    toast.error('Failed to load historical rates');
+    setRatesData([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
+// const fetchRatesForArea = async () => {
+//   try {
+//     setLoading(true);
+//     const response = await historicalRatesService.getHistoricalRates();
+//     const locationData = response.data?.find(loc => loc.location_name === selectedArea);
+    
+//     if (locationData && locationData.yearly_data) {
+//       const formattedData = Object.entries(locationData.yearly_data)
+//         .map(([year, data]) => ({
+//           year: parseInt(year),
+//           averagePrice: data.average_price,
+//           pricePerMarla: data.price_per_marla
+//         }))
+//         .sort((a, b) => a.year - b.year);
+//       setRatesData(formattedData);
+//     } else {
+//       setRatesData([]);
+//     }
+//   } catch (error) {
+//     console.error('Error fetching rates:', error);
+//     toast.error('Failed to load historical rates');
+//     setRatesData([]);
+//   } finally {
+//     setLoading(false);
+//   }
+// };
+
+  // const filteredData = useMemo(() => {
+  //   return MOCK_HISTORICAL_RATES.filter(
+  //     (rate) => rate.area === selectedArea && rate.marlaSize === selectedMarla
+  //   );
+  // }, [selectedArea, selectedMarla]);
+
+  // // If no data, show default data for the area
+  // const displayData = useMemo(() => {
+  //   if (filteredData.length > 0) {
+  //     return filteredData;
+  //   }
+  //   return MOCK_HISTORICAL_RATES.filter((rate) => rate.area === selectedArea);
+  // }, [filteredData, selectedArea]);
+
+  const displayData = useMemo(() => {
+  return ratesData;
+}, [ratesData]);
 
   // Calculate statistics
   const currentYear = displayData[displayData.length - 1];
-  const previousYear = displayData[displayData.length - 2];
-  const yearlyGrowth = currentYear && previousYear
-    ? ((currentYear.averagePrice - previousYear.averagePrice) / previousYear.averagePrice) * 100
-    : 0;
+const previousYear = displayData[displayData.length - 2];
+const yearlyGrowth = currentYear && previousYear
+  ? ((currentYear.averagePrice - previousYear.averagePrice) / previousYear.averagePrice) * 100
+  : 0;
 
-  const firstYear = displayData[0];
-  const totalGrowth = currentYear && firstYear
-    ? ((currentYear.averagePrice - firstYear.averagePrice) / firstYear.averagePrice) * 100
-    : 0;
+const firstYear = displayData[0];
+const totalGrowth = currentYear && firstYear
+  ? ((currentYear.averagePrice - firstYear.averagePrice) / firstYear.averagePrice) * 100
+  : 0;
+  console.log('Rendering with data:', { displayData, loading, selectedLocationId, selectedMarla });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-pink-50">
@@ -87,19 +250,23 @@ export default function HistoricalRates() {
                 Select Area
               </label>
               <select
-                value={selectedArea}
-                onChange={(e) => {
-                  setSelectedArea(e.target.value);
-                  toast.info(`Viewing rates for ${e.target.value}`);
-                }}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 transition-all"
-              >
-                {LAHORE_AREAS.map((area) => (
-                  <option key={area} value={area}>
-                    {area}
-                  </option>
-                ))}
-              </select>
+  value={selectedLocationId}
+  onChange={(e) => {
+    const locationId = parseInt(e.target.value);
+    const selectedLoc = areas.find(loc => (loc.location_rate_id || loc.id) === locationId);
+    setSelectedLocationId(locationId);
+    setSelectedArea(selectedLoc?.location_name || '');
+    toast.info(`Viewing rates for ${selectedLoc?.location_name}`);
+  }}
+  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 transition-all"
+>
+  <option value="">Select Location</option>
+  {areas.map((location) => (
+    <option key={location.location_rate_id || location.id} value={location.location_rate_id || location.id}>
+      {location.location_name}
+    </option>
+  ))}
+</select>
             </motion.div>
 
             <motion.div whileHover={{ scale: 1.02 }}>
@@ -137,7 +304,7 @@ export default function HistoricalRates() {
             >
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp className="w-5 h-5" />
-                <h3 className="font-semibold">Current Value (2026)</h3>
+                <h3 className="font-semibold">Current Value</h3>
               </div>
               <motion.div
                 initial={{ scale: 0 }}
@@ -187,7 +354,7 @@ export default function HistoricalRates() {
             >
               <div className="flex items-center gap-2 mb-2">
                 <BarChart3 className="w-5 h-5" />
-                <h3 className="font-semibold">Total Growth Since 2019</h3>
+                <h3 className="font-semibold">Total Growth</h3>
               </div>
               <motion.div
                 initial={{ scale: 0 }}
@@ -205,6 +372,18 @@ export default function HistoricalRates() {
             </motion.div>
           </div>
         )}
+
+        {loading && (
+  <div className="flex justify-center items-center py-12">
+    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+  </div>
+)}
+
+{!loading && displayData.length === 0 && (
+  <div className="text-center py-12">
+    <p className="text-gray-500">No historical data available for this area and marla size.</p>
+  </div>
+)}
 
         {/* Price Trend Chart */}
         <motion.div
@@ -324,46 +503,80 @@ export default function HistoricalRates() {
                   <th className="text-right py-4 px-4 font-semibold text-gray-700">YoY Growth</th>
                 </tr>
               </thead>
-              <tbody>
-                {displayData.map((rate, index) => {
-                  const prevRate = index > 0 ? displayData[index - 1] : null;
-                  const growth = prevRate
-                    ? ((rate.averagePrice - prevRate.averagePrice) / prevRate.averagePrice) * 100
-                    : 0;
+           <tbody>
+  {displayData.map((rate, index) => {
+    const prevRate = index > 0 ? displayData[index - 1] : null;
+    const growth = prevRate && prevRate.averagePrice > 0
+      ? ((rate.averagePrice - prevRate.averagePrice) / prevRate.averagePrice) * 100
+      : 0;
+    
+    // Format price display
+    const formatPriceDisplay = (price) => {
+      if (!price || price === 0) return 'N/A';
+      if (price >= 10000000) {
+        return `PKR ${(price / 10000000).toFixed(2)} Cr`;
+      }
+      if (price >= 100000) {
+        return `PKR ${(price / 100000).toFixed(2)} Lakh`;
+      }
+      return `PKR ${price.toLocaleString()}`;
+    };
+    
+    // Format per marla display
+    const formatPerMarlaDisplay = (rate) => {
+      if (rate.pricePerMarla && rate.pricePerMarla > 0) {
+        if (rate.pricePerMarla >= 100000) {
+          return `PKR ${(rate.pricePerMarla / 100000).toFixed(2)} Lakh`;
+        }
+        return `PKR ${rate.pricePerMarla.toLocaleString()}`;
+      }
+      // Calculate from average price if available
+      if (rate.averagePrice && rate.averagePrice > 0 && selectedMarla) {
+        const calculated = rate.averagePrice / selectedMarla;
+        if (calculated >= 100000) {
+          return `PKR ${(calculated / 100000).toFixed(2)} Lakh `;
+        }
+        return `PKR ${calculated.toLocaleString()}`;
+      }
+      return 'N/A';
+    };
 
-                  return (
-                    <motion.tr
-                      key={rate.year}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.9 + index * 0.05 }}
-                      whileHover={{ backgroundColor: '#faf5ff', scale: 1.01 }}
-                      className="border-b border-gray-100"
-                    >
-                      <td className="py-4 px-4 font-bold text-gray-900">{rate.year}</td>
-                      <td className="text-right py-4 px-4 text-gray-700 font-medium">
-                        PKR {(rate.averagePrice / 10000000).toFixed(2)} Cr
-                      </td>
-                      <td className="text-right py-4 px-4 text-gray-700 font-medium">
-                        PKR {(rate.pricePerMarla / 100000).toFixed(2)} Lakh
-                      </td>
-                      <td className="text-right py-4 px-4">
-                        {index > 0 && (
-                          <motion.span
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ delay: 1 + index * 0.05 }}
-                            className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 text-green-700 rounded-full font-bold"
-                          >
-                            <TrendingUp className="w-4 h-4" />
-                            +{growth.toFixed(1)}%
-                          </motion.span>
-                        )}
-                      </td>
-                    </motion.tr>
-                  );
-                })}
-              </tbody>
+    return (
+      <motion.tr
+        key={rate.year}
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: 0.9 + index * 0.05 }}
+        whileHover={{ backgroundColor: '#faf5ff', scale: 1.01 }}
+        className="border-b border-gray-100"
+      >
+        <td className="py-4 px-4 font-bold text-gray-900">{rate.year}</td>
+        <td className="text-right py-4 px-4 text-gray-700 font-medium">
+          {formatPriceDisplay(rate.averagePrice)}
+        </td>
+        <td className="text-right py-4 px-4 text-gray-700 font-medium">
+          {formatPerMarlaDisplay(rate)}
+        </td>
+        <td className="text-right py-4 px-4">
+          {index > 0 && !isNaN(growth) && growth !== 0 && (
+            <motion.span
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 1 + index * 0.05 }}
+              className={`inline-flex items-center gap-1 px-3 py-1 rounded-full font-bold ${
+                growth >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+              }`}
+            >
+              <TrendingUp className="w-4 h-4" />
+              {growth >= 0 ? '+' : ''}{growth.toFixed(1)}%
+            </motion.span>
+          )}
+          {index === 0 && <span className="text-gray-400">-</span>}
+        </td>
+      </motion.tr>
+    );
+  })}
+</tbody>
             </table>
           </div>
         </motion.div>

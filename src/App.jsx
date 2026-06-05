@@ -4,7 +4,7 @@ import { Navbar } from './views/components/navbar';
 import HomePage from './views/pages/Home';
 import Listings from './views/pages/Listing';
 import HouseDetails from './views/pages/HouseDetail';
-import HousePricePredictor from './views/pages/PricePredictor';
+import HousePricePredictor from './views/pages/HousePricePredictor';
 import HistoricalRates from './views/pages/HistoricalRates';
 import Profile from './views/pages/Profile';
 import UserProfile from './views/pages/Profile';
@@ -28,7 +28,7 @@ function App() {
             />
           } 
         />   
-        <Route path="//historical-rates" element={<HistoricalRates />} />  
+        <Route path="/historical-rates" element={<HistoricalRates />} />  
         <Route path="/profile" element={<UserProfile />} /> {/* Baaki routes */}
          <Route path="/sign_in" element={<SignIn  />} />
          <Route path="/sign_up" element={<SignUp  />} />

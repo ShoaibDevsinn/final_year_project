@@ -1,128 +1,566 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/navbar';
 import { 
   User, Trash2, MapPin, Home, Calendar, Award, Sparkles, Camera,
-  Mail, Lock, Eye, EyeOff, CheckCircle, Edit2, X
+  Mail, Lock, Eye, EyeOff, CheckCircle, Edit2, X, LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast, Toaster } from 'sonner';
+import { authService, predictionService } from '../../services/services';
 
 export default function UserProfile() {
+  const navigate = useNavigate();
   const [predictions, setPredictions] = useState([]);
-  const [userName, setUserName] = useState('Guest User');
-  const [userEmail, setUserEmail] = useState('guest@example.com');
+  const [userName, setUserName] = useState('');
+  const [isCurrentPasswordValid, setIsCurrentPasswordValid] = useState(true);
+  const [userEmail, setUserEmail] = useState('');
   const [userPassword, setUserPassword] = useState('••••••••');
   const [userAvatar, setUserAvatar] = useState(null);
+  const [userMemberSince, setUserMemberSince] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
   const [isEditingEmail, setIsEditingEmail] = useState(false);
   const [isEditingPassword, setIsEditingPassword] = useState(false);
+  const [validationErrors, setValidationErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [tempPassword, setTempPassword] = useState('');
   const [tempConfirmPassword, setTempConfirmPassword] = useState('');
+  const [tempNewEmail, setTempNewEmail] = useState('');
+  const [tempCurrentPassword, setTempCurrentPassword] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [loading, setLoading] = useState(true);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    const savedPredictions = localStorage.getItem('predictions');
-    if (savedPredictions) {
-      setPredictions(JSON.parse(savedPredictions));
+  fetchUserData();
+  fetchPredictionHistory();
+}, []);
+
+// Forgot Password Modal Component
+const ForgotPasswordModal = ({ isOpen, onClose }) => {
+  const [step, setStep] = useState(1);
+  const [email, setEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const [resendCount, setResendCount] = useState(0);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let timer;
+    if (countdown > 0) {
+      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
     }
+    return () => clearTimeout(timer);
+  }, [countdown]);
 
-    const savedName = localStorage.getItem('userName');
-    if (savedName) setUserName(savedName);
+  const handleSendOTP = async () => {
+    if (!email) {
+      setError('Please enter your email');
+      return;
+    }
     
-    const savedEmail = localStorage.getItem('userEmail');
-    if (savedEmail) setUserEmail(savedEmail);
+    setError('');
+    setLoading(true);
+    try {
+      const response = await authService.forgotPassword(email);
+      if (response.success) {
+        toast.success('OTP sent to your email!');
+        setCountdown(60);
+        setResendCount(prev => prev + 1);
+        setStep(2);
+      } else {
+        setError(response.message || 'Failed to send OTP');
+      }
+    } catch (error) {
+      setError(error.message || 'Failed to send OTP');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async () => {
+    if (!otp || otp.length !== 6) {
+      setError('Please enter valid 6-digit OTP');
+      return;
+    }
     
-    const savedPassword = localStorage.getItem('userPassword');
-    if (savedPassword) setUserPassword(savedPassword);
-
-    const savedAvatar = localStorage.getItem('userAvatar');
-    if (savedAvatar) setUserAvatar(savedAvatar);
-  }, []);
-
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Image size should be less than 5MB');
-        return;
+    setError('');
+    setLoading(true);
+    try {
+      const response = await authService.verifyOTP(email, otp);
+      if (response.success) {
+        toast.success('OTP verified!');
+        setStep(3);
+      } else {
+        setError(response.message || 'Invalid OTP');
       }
-      if (!file.type.startsWith('image/')) {
-        toast.error('Please upload an image file');
-        return;
+    } catch (error) {
+      setError(error.message || 'Verification failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (newPassword.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    
+    setError('');
+    setLoading(true);
+    try {
+      const response = await authService.resetPassword(email, newPassword, confirmPassword);
+      if (response.success) {
+        toast.success('Password reset successfully! Please login with your new password.');
+        onClose();
+        setStep(1);
+        setEmail('');
+        setOtp('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setResendCount(0);
+        // Redirect to login after 2 seconds
+        setTimeout(() => {
+          window.location.href = '/sign_in';
+        }, 2000);
+      } else {
+        setError(response.message || 'Failed to reset password');
       }
+    } catch (error) {
+      setError(error.message || 'Failed to reset password');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+ 
+
+  const handleResendOTP = async () => {
+    if (countdown > 0) {
+      toast.info(`Please wait ${countdown} seconds`);
+      return;
+    }
+    if (resendCount >= 3) {
+      setError('Maximum resend limit reached. Please try again later.');
+      return;
+    }
+    handleSendOTP();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl"
+      >
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">
+            {step === 1 && 'Forgot Password'}
+            {step === 2 && 'Verify OTP'}
+            {step === 3 && 'Reset Password'}
+          </h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+            {error}
+          </div>
+        )}
+
+        {step === 1 && (
+          <div className="space-y-4">
+            <p className="text-gray-600 text-sm">
+              Enter your registered email address. We'll send you a verification code.
+            </p>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Email Address
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email"
+                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              />
+            </div>
+            <button
+              onClick={handleSendOTP}
+              disabled={loading}
+              className="w-full py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all font-semibold"
+            >
+              {loading ? 'Sending...' : 'Send OTP'}
+            </button>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-4">
+            <p className="text-gray-600 text-sm">
+              Enter the 6-digit code sent to {email}
+            </p>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                OTP Code
+              </label>
+              <input
+                type="text"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="Enter 6-digit code"
+                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-center text-2xl tracking-widest"
+                maxLength={6}
+              />
+            </div>
+            <button
+              onClick={handleVerifyOTP}
+              disabled={loading}
+              className="w-full py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all font-semibold"
+            >
+              {loading ? 'Verifying...' : 'Verify OTP'}
+            </button>
+            <div className="text-center">
+              <button
+                onClick={handleResendOTP}
+                disabled={countdown > 0 || resendCount >= 3}
+                className={`text-sm ${countdown > 0 || resendCount >= 3 ? 'text-gray-400' : 'text-emerald-600 hover:text-emerald-700'}`}
+              >
+                {countdown > 0 ? `Resend in ${countdown}s` : 
+                 resendCount >= 3 ? 'Maximum resend limit reached' : 'Resend OTP'}
+              </button>
+              {resendCount > 0 && resendCount < 3 && (
+                <p className="text-xs text-gray-400 mt-1">Attempts: {resendCount}/3</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="space-y-4">
+            <p className="text-gray-600 text-sm">
+              Create a new password for your account.
+            </p>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                New Password
+              </label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter new password (min 6 characters)"
+                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Confirm Password
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm new password"
+                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              />
+            </div>
+            <button
+              onClick={handleResetPassword}
+              disabled={loading}
+              className="w-full py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all font-semibold"
+            >
+              {loading ? 'Resetting...' : 'Reset Password'}
+            </button>
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+};
+
+const formatMemberSince = (date) => {
+    if (!date) return '2024';
+    return new Date(date).getFullYear();
+  };
+
+const fetchUserData = async () => {
+  try {
+    const user = authService.getCurrentUser();
+    console.log('User from localStorage:', user);
+    
+    if (user) {
+      setUserName(user.username || user.full_name || user.email?.split('@')[0] || 'User');
+      setUserEmail(user.email || '');
+      setUserMemberSince(user.date_joined || user.created_at || new Date().toISOString());
       
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const imageUrl = reader.result;
-        setUserAvatar(imageUrl);
-        localStorage.setItem('userAvatar', imageUrl);
-        toast.success('Profile picture updated! 🎉');
-      };
-      reader.readAsDataURL(file);
+      const profileResponse = await authService.getProfile();
+      console.log('Profile response:', profileResponse);
+      
+      if (profileResponse.success && profileResponse.data) {
+        if (profileResponse.data.profile_image) {
+          setUserAvatar(profileResponse.data.profile_image);
+        }
+      }
+    } else {
+      navigate('/sign_in');
     }
-  };
+  } catch (error) {
+    console.error('Error fetching user data:', error);
+    toast.error('Failed to load user data');
+  } finally {
+    setLoading(false);
+  }
+};
 
-  const handleDeletePrediction = (id) => {
-    const updatedPredictions = predictions.filter((p) => p.id !== id);
-    setPredictions(updatedPredictions);
-    localStorage.setItem('predictions', JSON.stringify(updatedPredictions));
+const fetchPredictionHistory = async () => {
+  try {
+    const response = await predictionService.getPredictionHistory();
+    console.log('Prediction history response:', response);
+    
+    // ✅ FIX: Get predictions from response.predictions (not response.data)
+    let predictionsList = [];
+    if (response.predictions && Array.isArray(response.predictions)) {
+      predictionsList = response.predictions;
+    } else if (response.data && Array.isArray(response.data)) {
+      predictionsList = response.data;
+    } else if (response.data && response.data.predictions) {
+      predictionsList = response.data.predictions;
+    } else if (Array.isArray(response)) {
+      predictionsList = response;
+    }
+    
+    console.log('Predictions list:', predictionsList);
+    
+ const formattedPredictions = predictionsList.map(pred => ({
+  id: pred.prediction_id || pred.id,  // Use prediction_id from API
+  area: pred.location || pred.area || 'Unknown',
+  marla: pred.area_marla || pred.marla || 0,
+  bedrooms: pred.bedrooms || 0,
+  bathrooms: pred.bathrooms || 0,
+  kitchen: pred.kitchens || pred.kitchen || 0,
+  predictedPrice: pred.predicted_price || pred.predictedPrice || 0,
+  pricePerMarla: pred.per_marla_rate || (pred.predicted_price / pred.area_marla) || 0,
+  date: pred.created_at || pred.date || new Date().toISOString(),
+  furnished: pred.is_furnished || false,
+  hasGarage: false,
+  hasGarden: pred.has_lawn || false,
+  hasRoofAccess: false
+}));
+console.log('Sample prediction:', formattedPredictions[0]);
+    setPredictions(formattedPredictions);
+    console.log('Predictions state after set:', formattedPredictions.length);
+  } catch (error) {
+    console.error('Error fetching predictions:', error);
+    setPredictions([]);
+  }
+};
+
+  const handleImageUpload = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  if (file.size > 5 * 1024 * 1024) {
+    toast.error('Image size should be less than 5MB');
+    return;
+  }
+  if (!file.type.startsWith('image/')) {
+    toast.error('Please upload an image file');
+    return;
+  }
+  
+  const formData = new FormData();
+  formData.append('profile_image', file);
+  
+  try {
+    const response = await authService.updateProfileImage(formData);
+    if (response.success) {
+      setUserAvatar(response.data.profile_image_url);
+      toast.success('Profile picture updated! 🎉');
+    }
+  } catch (error) {
+    toast.error(error.message || 'Failed to update profile picture');
+  }
+};
+
+  const handleDeletePrediction = async (id) => {
+  try {
+    await predictionService.deletePrediction(id);
+    setPredictions(predictions.filter((p) => p.id !== id));
     toast.success('Prediction deleted successfully!');
-  };
+  } catch (error) {
+    toast.error(error.message || 'Failed to delete prediction');
+  }
+};
 
-  const handleSaveName = () => {
-    if (userName.trim() === '') {
-      toast.error('Name cannot be empty');
-      return;
+  const handleSaveName = async () => {
+  if (userName.trim() === '') {
+    toast.error('Name cannot be empty');
+    return;
+  }
+  
+  try {
+    const response = await authService.updateUsername(userName);
+    if (response.success) {
+      setIsEditingName(false);
+      toast.success(`Name updated to ${userName}! 🎉`);
     }
-    localStorage.setItem('userName', userName);
-    setIsEditingName(false);
-    toast.success(`Name updated to ${userName}! 🎉`);
-  };
+  } catch (error) {
+    toast.error(error.message || 'Failed to update name');
+  }
+};
 
-  const handleSaveEmail = () => {
-    if (userEmail.trim() === '') {
-      toast.error('Email cannot be empty');
-      return;
+  const handleSaveEmail = async () => {
+  if (tempNewEmail.trim() === '') {
+    toast.error('Email cannot be empty');
+    return;
+  }
+  if (!tempNewEmail.includes('@') || !tempNewEmail.includes('.')) {
+    toast.error('Please enter a valid email address');
+    return;
+  }
+  
+  try {
+    const response = await authService.updateEmail(tempNewEmail);
+    if (response.success) {
+      setUserEmail(tempNewEmail);
+      setIsEditingEmail(false);
+      setTempNewEmail('');
+      toast.success(`Email updated to ${tempNewEmail}! 📧`);
+      
+      // Update stored user data
+      const user = authService.getCurrentUser();
+      if (user) {
+        user.email = tempNewEmail;
+        localStorage.setItem('user', JSON.stringify(user));
+      }
     }
-    if (!userEmail.includes('@') || !userEmail.includes('.')) {
-      toast.error('Please enter a valid email address');
-      return;
-    }
-    localStorage.setItem('userEmail', userEmail);
-    setIsEditingEmail(false);
-    toast.success(`Email updated to ${userEmail}! 📧`);
-  };
+  } catch (error) {
+    toast.error(error.message || 'Failed to update email');
+  }
+};
 
-  const handleSavePassword = () => {
-    if (tempPassword.length < 6) {
-      toast.error('Password must be at least 6 characters');
-      return;
-    }
-    if (tempPassword !== tempConfirmPassword) {
-      toast.error('Passwords do not match');
-      return;
-    }
-    const maskedPassword = '•'.repeat(tempPassword.length);
-    setUserPassword(maskedPassword);
-    localStorage.setItem('userPassword', tempPassword);
-    setIsEditingPassword(false);
-    setTempPassword('');
-    setTempConfirmPassword('');
-    toast.success('Password updated successfully! 🔒');
-  };
+const cancelEmailEdit = () => {
+  setIsEditingEmail(false);
+  setTempNewEmail('');
+  setTempCurrentPassword('');
+};
 
-  const cancelPasswordEdit = () => {
-    setIsEditingPassword(false);
-    setTempPassword('');
-    setTempConfirmPassword('');
-  };
+const handleSavePassword = async () => {
+  // Clear previous validation states
+  setValidationErrors({});
+  
+  // Validation checks
+  if (!tempCurrentPassword) {
+    toast.error('Please enter your current password');
+    return;
+  }
+  if (tempPassword.length < 6) {
+    toast.error('New password must be at least 6 characters');
+    return;
+  }
+  if (tempPassword !== tempConfirmPassword) {
+    toast.error('New passwords do not match');
+    return;
+  }
+  
+  try {
+    const response = await authService.changePassword(
+      tempCurrentPassword, 
+      tempPassword, 
+      tempConfirmPassword
+    );
+    
+    if (response.success) {
+      const maskedPassword = '•'.repeat(tempPassword.length);
+      setUserPassword(maskedPassword);
+      setIsEditingPassword(false);
+      setTempPassword('');
+      setTempConfirmPassword('');
+      setTempCurrentPassword('');
+      setIsCurrentPasswordValid(true);
+      setValidationErrors({});
+      toast.success('Password updated successfully! 🔒');
+    }
+  } catch (error) {
+    console.log('Full error object:', error);
+    
+    // ✅ Check for message field (for old password incorrect)
+    if (error.message) {
+      if (error.message.toLowerCase().includes('old password is incorrect')) {
+        setIsCurrentPasswordValid(false);
+        toast.error('❌ Current password is incorrect');
+      } else {
+        toast.error(`❌ ${error.message}`);
+      }
+    }
+    // ✅ Check for errors object
+    else if (error.errors) {
+      if (error.errors.old_password) {
+        setIsCurrentPasswordValid(false);
+        toast.error(`❌ ${error.errors.old_password[0]}`);
+      } else if (error.errors.new_password) {
+        setValidationErrors({ new_password: error.errors.new_password });
+        toast.error(`❌ ${error.errors.new_password[0]}`);
+      } else if (error.errors.non_field_errors) {
+        toast.error(`❌ ${error.errors.non_field_errors[0]}`);
+      } else {
+        const firstKey = Object.keys(error.errors)[0];
+        toast.error(`❌ ${error.errors[firstKey][0]}`);
+      }
+    }
+    // ✅ Check for direct string error
+    else if (typeof error === 'string') {
+      toast.error(`❌ ${error}`);
+    }
+    else {
+      toast.error('❌ Failed to update password');
+    }
+    console.log('Error object:', error);
+console.log('Error type:', typeof error);
+console.log('Error keys:', error ? Object.keys(error) : 'null');
+  }
+};
+
+ const cancelPasswordEdit = () => {
+  setIsEditingPassword(false);
+  setTempPassword('');
+  setTempConfirmPassword('');
+  setTempCurrentPassword('');
+  setIsCurrentPasswordValid(true);
+};
+
+  if (loading) {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50">
+      <Navbar />
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+          <p className="mt-4 text-gray-600">Loading profile...</p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50">
-      <Toaster position="top-center" richColors />
       <Navbar />
-
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Profile Header */}
         <motion.div
@@ -176,141 +614,208 @@ export default function UserProfile() {
               {/* Info Section */}
               <div className="flex-1">
                 {/* Name with Edit Below */}
-                <div className="mb-4">
-                  {isEditingName ? (
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={userName}
-                          onChange={(e) => setUserName(e.target.value)}
-                          className="px-4 py-2 border-2 text-xl font-semibold w-80"
-                          autoFocus
-                        />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={handleSaveName} className="px-4 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm">
-                          Save
-                        </button>
-                        <button onClick={() => setIsEditingName(false)} className="px-4 py-1.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm">
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-                          {userName}
-                          <motion.span
-                            animate={{ rotate: [0, 10, -10, 0] }}
-                            transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 3 }}
-                          >
-                            <Sparkles className="w-6 h-6 text-yellow-500" />
-                          </motion.span>
-                        </h1>
-                      </div>
-                      <button
-                        onClick={() => setIsEditingName(true)}
-                        className="text-sm text-blue-600 hover:text-blue-700 mt-1 font-medium"
-                      >
-                        Edit Name →
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Email */}
-                <div className="mb-4">
-                  {isEditingEmail ? (
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center gap-2">
-                        <Mail className="w-5 h-5 text-gray-400" />
-                        <input
-                          type="email"
-                          value={userEmail}
-                          onChange={(e) => setUserEmail(e.target.value)}
-                          className="px-4 py-2 border-2 border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base w-80"
-                        />
-                      </div>
-                      <div className="flex items-center gap-2 pl-7">
-                        <button onClick={handleSaveEmail} className="px-4 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm">
-                          Save
-                        </button>
-                        <button onClick={() => setIsEditingEmail(false)} className="px-4 py-1.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm">
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-3">
-                      <Mail className="w-5 h-5 text-gray-400" />
-                      <span className="text-gray-700 text-base">{userEmail}</span>
-                      <button
-                        onClick={() => setIsEditingEmail(true)}
-                        className="p-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all"
-                      >
-                        <Edit2 className="w-4 h-4 text-gray-500" />
-                      </button>
-                    </div>
-                  )}
-                </div>
+               {/* Name with Edit Below */}
+<div className="mb-4">
+  {isEditingName ? (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={userName}
+          onChange={(e) => setUserName(e.target.value)}
+          className="px-4 py-2 border-2 text-xl font-semibold w-80 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+          autoFocus
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <button onClick={handleSaveName} className="px-4 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm">
+          Save
+        </button>
+        <button onClick={() => setIsEditingName(false)} className="px-4 py-1.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm">
+          Cancel
+        </button>
+      </div>
+    </div>
+  ) : (
+    <div>
+      <div className="flex items-center gap-2">
+        <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
+          {userName}
+          <motion.span
+            animate={{ rotate: [0, 10, -10, 0] }}
+            transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 3 }}
+          >
+            <Sparkles className="w-6 h-6 text-yellow-500" />
+          </motion.span>
+        </h1>
+      </div>
+      <button
+        onClick={() => setIsEditingName(true)}
+        className="text-sm text-blue-600 hover:text-blue-700 mt-1 font-medium"
+      >
+        Edit Name →
+      </button>
+    </div>
+  )}
+</div>
+               {/* Email */}
+{/* Email */}
+<div className="mb-4">
+  {isEditingEmail ? (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <Mail className="w-5 h-5 text-gray-400" />
+        <input
+          type="email"
+          value={tempNewEmail || userEmail}
+          onChange={(e) => setTempNewEmail(e.target.value)}
+          placeholder="New email"
+          className="px-4 py-2 border-2 border-blue-300 rounded-xl text-base w-80 focus:ring-2 focus:ring-emerald-500"
+        />
+      </div>
+      <div className="flex items-center gap-2 pl-7">
+        <button onClick={handleSaveEmail} className="px-4 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm">
+          Save
+        </button>
+        <button onClick={cancelEmailEdit} className="px-4 py-1.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm">
+          Cancel
+        </button>
+      </div>
+    </div>
+  ) : (
+    <div className="flex items-center gap-3">
+      <Mail className="w-5 h-5 text-gray-400" />
+      <span className="text-gray-700 text-base">{userEmail}</span>
+      <button
+  onClick={() => {
+     setIsEditingEmail(true);  
+    setTempNewEmail(userEmail);
+  }}
+  className="p-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all"
+>
+  <Edit2 className="w-4 h-4 text-gray-500" />
+</button>
+    </div>
+  )}
+</div>
 
                 {/* Password */}
-                <div className="mb-4">
-                  {isEditingPassword ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Lock className="w-5 h-5 text-gray-400" />
-                        <div className="relative">
-                          <input
-                            type={showPassword ? "text" : "password"}
-                            value={tempPassword}
-                            onChange={(e) => setTempPassword(e.target.value)}
-                            className="px-4 py-2 border-2 border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base w-80"
-                            placeholder="New password (min 6 characters)"
-                          />
-                          <button onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-2.5 text-gray-400">
-                            {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                          </button>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 pl-7">
-                        <input
-                          type={showPassword ? "text" : "password"}
-                          value={tempConfirmPassword}
-                          onChange={(e) => setTempConfirmPassword(e.target.value)}
-                          className="px-4 py-2 border-2 border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base w-80"
-                          placeholder="Confirm new password"
-                        />
-                      </div>
-                      <div className="flex gap-2 pl-7">
-                        <button onClick={handleSavePassword} className="px-4 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm">Update</button>
-                        <button onClick={cancelPasswordEdit} className="px-4 py-1.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm">Cancel</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-3">
-                      <Lock className="w-5 h-5 text-gray-400" />
-                      <span className="text-gray-700 text-base">{userPassword}</span>
-                      <button
-                        onClick={() => setIsEditingPassword(true)}
-                        className="p-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all"
-                      >
-                        <Edit2 className="w-4 h-4 text-gray-500" />
-                      </button>
-                    </div>
-                  )}
-                </div>
+           {/* Password */}
+{/* Password */}
+<div className="mb-4">
+  {isEditingPassword ? (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <Lock className="w-5 h-5 text-gray-400" />
+        <div className="relative flex-1">
+          <input
+            type={showPassword ? "text" : "password"}
+            value={tempCurrentPassword}
+            onChange={(e) => {
+              setTempCurrentPassword(e.target.value);
+              // Reset validation state when user types
+              setIsCurrentPasswordValid(true);
+            }}
+            className={`px-4 py-2 border-2 rounded-xl focus:ring-2 focus:ring-blue-500 text-base w-80 ${
+              !isCurrentPasswordValid ? 'border-red-500' : 'border-blue-300'
+            }`}
+            placeholder="Current password"
+          />
+        </div>
+      </div>
+      
+      {/* Show Forgot Password link ONLY if current password is entered and incorrect */}
+     {/* Show Forgot Password link ONLY if current password is entered and incorrect */}
+{tempCurrentPassword.length > 0 && !isCurrentPasswordValid && (
+  <div className="flex justify-self-base pl-7">
+    <button
+      onClick={() => {
+        setIsEditingPassword(false);
+        setShowForgotPassword(true);
+        setTempCurrentPassword('');
+        setTempPassword('');
+        setTempConfirmPassword('');
+        setIsCurrentPasswordValid(true);
+      }}
+      className="text-sm text-red-500 hover:text-red-600 transition-all"
+    >
+      Forgot Password?
+    </button>
+  </div>
+)}
+      
+     <div className="flex items-center gap-2 pl-7">
+  <div className="relative w-80">
+    <input
+      type={showPassword ? "text" : "password"}
+      value={tempPassword}
+      onChange={(e) => {
+        setTempPassword(e.target.value);
+        setValidationErrors({}); // Clear validation errors when user types
+      }}
+      className={`px-4 py-2 border-2 rounded-xl focus:ring-2 focus:ring-blue-500 text-base w-full ${
+        validationErrors.new_password ? 'border-red-500' : 'border-blue-300'
+      }`}
+      placeholder="New password (min 8 characters)"
+    />
+    {/* ✅ ADD THIS - Show validation errors below the input */}
+    {validationErrors.new_password && (
+      <div className="mt-2 space-y-1">
+        {validationErrors.new_password.map((err, idx) => (
+          <p key={idx} className="text-xs text-red-500">
+            • {err}
+          </p>
+        ))}
+      </div>
+    )}
+  </div>
+</div>
+      <div className="flex items-center gap-2 pl-7">
+        <input
+          type={showPassword ? "text" : "password"}
+          value={tempConfirmPassword}
+          onChange={(e) => setTempConfirmPassword(e.target.value)}
+          className="px-4 py-2 border-2 border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base w-80"
+          placeholder="Confirm new password"
+        />
+      </div>
+      <div className="flex gap-2 pl-7">
+        <button onClick={handleSavePassword} className="px-4 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm">
+          Update Password
+        </button>
+        <button onClick={cancelPasswordEdit} className="px-4 py-1.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm">
+          Cancel
+        </button>
+      </div>
+    </div>
+  ) : (
+    <div className="flex items-center gap-3">
+      <Lock className="w-5 h-5 text-gray-400" />
+      <span className="text-gray-700 text-base">{userPassword}</span>
+      <button
+        onClick={() => {
+          setIsEditingPassword(true);
+          setIsCurrentPasswordValid(true);
+          setTempCurrentPassword('');
+          setTempPassword('');
+          setTempConfirmPassword('');
+        }}
+        className="p-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all"
+      >
+        <Edit2 className="w-4 h-4 text-gray-500" />
+      </button>
+    </div>
+  )}
+</div>
 
                 {/* Badges */}
                 <div className="flex flex-wrap gap-3 mt-2">
                   <span className="px-3 py-1 bg-emerald-50 text-emerald-700 text-xs rounded-full flex items-center gap-1">
                     <Award className="w-3 h-3" /> Property Enthusiast
                   </span>
-                  <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs rounded-full">
-                    Member since 2024
-                  </span>
+                 <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs rounded-full">
+  Member since {formatMemberSince(userMemberSince)}
+</span>
                   <span className="px-3 py-1 bg-purple-50 text-purple-600 text-xs rounded-full flex items-center gap-1">
                     <Camera className="w-3 h-3" /> {predictions.length} Predictions
                   </span>
@@ -463,6 +968,11 @@ export default function UserProfile() {
             </div>
           )}
         </motion.div>
+        {/* Forgot Password Modal */}
+<ForgotPasswordModal 
+  isOpen={showForgotPassword} 
+  onClose={() => setShowForgotPassword(false)} 
+/>
       </div>
     </div>
   );
