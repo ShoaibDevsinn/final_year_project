@@ -3,11 +3,11 @@ import {
   TrendingUp, Home, Sparkles, CheckCircle, Bed, Bath, Calendar, Ruler, MapPin,
   Users, Archive, Gem, Layers, Building2, Dumbbell, BookOpen, Sofa, 
   UtensilsCrossed, Trees, Waves, Zap, Armchair, CornerDownRight, 
-  Activity, ClipboardList, SquareParking, Save, DollarSign
+  Activity, ClipboardList, SquareParking, Save, DollarSign,ChevronDown 
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Navbar } from '../components/navbar';
-import { useState, useEffect } from 'react';  // ← Add useEffect
+import { useState, useEffect, useRef } from 'react';  // ← Add useEffect
 import { listingService, predictionService } from '../../services/services';
 import { useNavigate } from 'react-router-dom';
 import { usePredictionViewModel } from '../../viewmodels/usePredictionViewModel';
@@ -39,6 +39,12 @@ const HousePricePredictor = () => {
     facing_park: false,
   });
 
+  // Add these new state variables after prediction state (around line 30)
+const [showViewButton, setShowViewButton] = useState(false);  // Controls button visibility
+const [viewingProperties, setViewingProperties] = useState(false);  // Loading state
+const [filteredProperties, setFilteredProperties] = useState([]);  // Properties from API
+const [showPropertyModal, setShowPropertyModal] = useState(false);  // Modal visibility
+
   // 2. SECOND - Other state declarations
   const [prediction, setPrediction] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -55,6 +61,104 @@ const HousePricePredictor = () => {
   
   // 3. THIRD - ViewModel hook
   const { getPrediction } = usePredictionViewModel();
+
+  const CustomDropdown = ({ options, value, onChange, placeholder }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedOption = options.find(opt => opt.value === value);
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 transition-all bg-white text-left flex justify-between items-center"
+      >
+        <span className={selectedOption ? "text-gray-900" : "text-gray-500"}>
+          {selectedOption ? selectedOption.label : placeholder}
+        </span>
+        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-300 rounded-xl shadow-lg z-50 max-h-60 overflow-y-auto">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => {
+                onChange(option.value);
+                setIsOpen(false);
+              }}
+              className={`w-full text-left px-4 py-2 hover:bg-emerald-50 transition-colors ${
+                option.value === value ? "bg-emerald-100 text-emerald-700" : "text-gray-700"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+  // Fetch properties within predicted price range
+const handleViewPropertiesInRange = async () => {
+  if (!prediction) return;
+  
+  setViewingProperties(true);
+  
+  try {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      toast.error('Please login to view properties');
+      return;
+    }
+    
+    // Call your backend API with min and max price
+    const response = await fetch(
+      `http://127.0.0.1:8000/api/listings/filter-by-price/?min_price=${prediction.low_estimate}&max_price=${prediction.high_estimate}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    const data = await response.json();
+    
+    if (data.success && data.data) {
+      setFilteredProperties(data.data);
+      setShowPropertyModal(true);
+      
+      if (data.data.length === 0) {
+        toast.info('No properties found in this price range');
+      } else {
+        toast.success(`Found ${data.data.length} properties in this range`);
+      }
+    } else {
+      toast.error(data.message || 'Failed to fetch properties');
+    }
+  } catch (error) {
+    console.error('Error fetching properties:', error);
+    toast.error('Failed to fetch properties. Please try again.');
+  } finally {
+    setViewingProperties(false);
+  }
+};
 
   const handleSavePrediction = async () => {
   if (!prediction) {
@@ -114,39 +218,53 @@ const validateField = (field, value) => {
   const newErrors = { ...errors };
   
   if (field === 'area' && (!value || value === '')) {
-    newErrors.area = 'Please fill in the location field';
+    newErrors.area = 'Please select a location';
   } else if (field === 'area') {
     delete newErrors.area;
   }
   
   if (field === 'marla' && (!value || value === '')) {
-    newErrors.marla = 'Please fill in the marla field';
+    newErrors.marla = 'Please enter property size';
+  } else if (field === 'marla' && (parseFloat(value) <= 0)) {
+    newErrors.marla = 'Marla size must be greater than 0';
   } else if (field === 'marla') {
     delete newErrors.marla;
   }
   
   if (field === 'bedrooms' && (!value || value === '')) {
-    newErrors.bedrooms = 'Please fill in the bedroom field';
+    newErrors.bedrooms = 'Please enter number of bedrooms';
+  } else if (field === 'bedrooms' && (parseInt(value) <= 0)) {
+    newErrors.bedrooms = 'Bedrooms must be at least 1';
   } else if (field === 'bedrooms') {
     delete newErrors.bedrooms;
   }
   
   if (field === 'bathrooms' && (!value || value === '')) {
-    newErrors.bathrooms = 'Please fill in the bathroom field';
+    newErrors.bathrooms = 'Please enter number of bathrooms';
+  } else if (field === 'bathrooms' && (parseInt(value) <= 0)) {
+    newErrors.bathrooms = 'Bathrooms must be at least 1';
   } else if (field === 'bathrooms') {
     delete newErrors.bathrooms;
   }
   
   if (field === 'kitchens' && (!value || value === '')) {
-    newErrors.kitchens = 'Please fill in the kitchen field';
+    newErrors.kitchens = 'Please enter number of kitchens';
+  } else if (field === 'kitchens' && (parseInt(value) <= 0)) {
+    newErrors.kitchens = 'Kitchens must be at least 1';
   } else if (field === 'kitchens') {
     delete newErrors.kitchens;
   }
   
   if (field === 'built_year' && (!value || value === '')) {
-    newErrors.built_year = 'Please fill in the construction year field';
+    newErrors.built_year = 'Please enter construction year';
   } else if (field === 'built_year') {
-    delete newErrors.built_year;
+    const currentYear = new Date().getFullYear();
+    const year = parseInt(value);
+    if (year < 1990 || year > currentYear + 1) {
+      newErrors.built_year = `Year must be between 1990 and ${currentYear + 1}`;
+    } else {
+      delete newErrors.built_year;
+    }
   }
   
   setErrors(newErrors);
@@ -202,9 +320,40 @@ useEffect(() => {
     return;
   }
 
-  if (!houseData.area || !houseData.marla || !houseData.bedrooms || 
-      !houseData.bathrooms || !houseData.kitchens || !houseData.built_year) {
-    toast.error('Please fill in all required fields');
+  // Validate required fields
+  let hasError = false;
+  const newErrors = {};
+
+  if (!houseData.area || houseData.area === '') {
+    newErrors.area = 'Please select a location';
+    hasError = true;
+  }
+  if (!houseData.marla || houseData.marla === '') {
+    newErrors.marla = 'Please enter property size (Marla)';
+    hasError = true;
+  }
+  if (!houseData.bedrooms || houseData.bedrooms === '') {
+    newErrors.bedrooms = 'Please enter number of bedrooms';
+    hasError = true;
+  }
+  if (!houseData.bathrooms || houseData.bathrooms === '') {
+    newErrors.bathrooms = 'Please enter number of bathrooms';
+    hasError = true;
+  }
+  if (!houseData.kitchens || houseData.kitchens === '') {
+    newErrors.kitchens = 'Please enter number of kitchens';
+    hasError = true;
+  }
+  if (!houseData.built_year || houseData.built_year === '') {
+    newErrors.built_year = 'Please enter construction year';
+    hasError = true;
+  }
+
+  if (hasError) {
+    setErrors(newErrors);
+    // Show first error as toast
+    const firstError = Object.values(newErrors)[0];
+    toast.error(firstError);
     return;
   }
 
@@ -236,41 +385,75 @@ useEffect(() => {
     
     const result = await getPrediction(requestData);
     
-    // ✅ ADD THIS: Log the result to see what's coming back
     console.log('Full API Response:', result);
     
-    // ✅ FIX: Check if result exists and has the expected structure
     if (!result) {
       throw new Error('No data received from server');
     }
     
-    // Handle different response structures
     let predictionData;
     if (result.estimated_market_value) {
-      // Direct response
       predictionData = result;
     } else if (result.data && result.data.estimated_market_value) {
-      // Nested response
       predictionData = result.data;
     } else if (result.success && result.data) {
-      // Success wrapper response
       predictionData = result.data;
     } else {
       console.error('Unexpected response structure:', result);
       throw new Error('Invalid response format from server');
     }
     
-    // Set the prediction state
     setPrediction(predictionData);
+    setShowViewButton(true);
     toast.success('Prediction completed successfully!');
   } catch (error) {
     console.error('Prediction error details:', error);
-    toast.error(error.message || 'Failed to predict price. Please try again.');
+    
+    // Handle field-specific errors from backend
+    if (error.errors) {
+      const fieldErrors = {};
+      const backendErrors = error.errors;
+      
+      // Map backend field names to frontend field names
+      if (backendErrors.location) {
+        fieldErrors.area = backendErrors.location[0];
+      }
+      if (backendErrors.area_marla) {
+        fieldErrors.marla = backendErrors.area_marla[0];
+      }
+      if (backendErrors.bedrooms) {
+        fieldErrors.bedrooms = backendErrors.bedrooms[0];
+      }
+      if (backendErrors.bathrooms) {
+        fieldErrors.bathrooms = backendErrors.bathrooms[0];
+      }
+      if (backendErrors.kitchens) {
+        fieldErrors.kitchens = backendErrors.kitchens[0];
+      }
+      if (backendErrors.construction_year) {
+        fieldErrors.built_year = backendErrors.construction_year[0];
+      }
+      
+      setErrors(fieldErrors);
+      
+      // Show the first error as toast
+      const firstError = Object.values(fieldErrors)[0];
+      if (firstError) {
+        toast.error(firstError);
+      } else {
+        toast.error(error.message || 'Failed to predict price');
+      }
+    } else if (error.message) {
+      toast.error(error.message);
+    } else {
+      toast.error('Failed to predict price. Please try again.');
+    }
+    
+    setShowViewButton(false);
   } finally {
     setIsLoading(false);
   }
 };
-
   const formatPrice = (price) => {
     if (price >= 10000000) {
       return `PKR ${(price / 10000000).toFixed(2)} Cr`;
@@ -340,22 +523,27 @@ useEffect(() => {
             <div className="p-6 space-y-5">
               
               {/* Area/Location Input */}
-              <div className="space-y-3">
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                  <MapPin className="w-4 h-4 text-emerald-600" />
-                  Location / Area *
-                </label>
-                <select
-                  value={houseData.area}
-                  onChange={(e) => setHouseData(prev => ({ ...prev, area: e.target.value }))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 caret-emerald-600 transition-all"
-                >
-                  <option value="">Select Area</option>
-                  {lahoreAreas.map(area => (
-                    <option key={area} value={area}>{area}</option>
-                  ))}
-                </select>
-              </div>
+            <div className="space-y-3">
+  <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+    <MapPin className="w-4 h-4 text-emerald-600" />
+    Location / Area *
+  </label>
+  {(() => {
+    const areaOptions = lahoreAreas.map(area => ({
+      value: area,
+      label: area
+    }));
+    
+    return (
+      <CustomDropdown
+        options={areaOptions}
+        value={houseData.area}
+        onChange={(value) => setHouseData(prev => ({ ...prev, area: value }))}
+        placeholder="Select Area"
+      />
+    );
+  })()}
+</div>
 
               {/* Property Size */}
               <div className="space-y-3">
@@ -394,22 +582,22 @@ useEffect(() => {
 {errors.bedrooms && <p className="text-red-500 text-sm">{errors.bedrooms}</p>}
                 </div>
 
-                <div className="space-y-3">
-                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                    <Bath className="w-4 h-4 text-emerald-600" />
-                    Bathrooms *
-                  </label>
-                 <input
-  type="number"
-  placeholder="Enter the bathroom"
-  value={houseData.bathrooms}
-  onChange={(e) => handleChange('bathrooms', e.target.value)}
-  className={`w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 ${
-    errors.bathrooms ? 'border-red-500' : 'border-gray-300'
-  }`}
-/>
-{errors.bathrooms && <p className="text-red-500 text-sm">{errors.bathrooms}</p>}
-                </div>
+           <div className="space-y-3">
+  <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+    <Bath className="w-4 h-4 text-emerald-600" />
+    Bathrooms *
+  </label>
+  <input
+    type="number"
+    placeholder="Enter the bathroom"
+    value={houseData.bathrooms}
+    onChange={(e) => handleChange('bathrooms', e.target.value)}
+    className={`w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 caret-emerald-500 ${
+      errors.bathrooms ? 'border-red-500' : 'border-gray-300'
+    }`}
+  />
+  {errors.bathrooms && <p className="text-red-500 text-sm mt-1">{errors.bathrooms}</p>}
+</div>
 
                 <div className="space-y-3">
                   <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
@@ -670,17 +858,7 @@ onChange={(e) => setHouseData(prev => ({ ...prev, servant_quarters: e.target.val
           Estimated market value based on the provided details
         </p>
       </div>
-      {prediction && (
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={handleSavePrediction}
-          className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl transition-all text-white"
-        >
-          <Save className="w-4 h-4" />
-          Save Prediction
-        </motion.button>
-      )}
+      {/* Save Prediction Button - Moved to bottom section */}
     </div>
   </div>
   
@@ -700,10 +878,12 @@ onChange={(e) => setHouseData(prev => ({ ...prev, servant_quarters: e.target.val
       </div>
     )}
 
+
     {prediction && (
       <div className="space-y-6">
-        <div className="text-center bg-gradient-to-r from-emerald-50 to-teal-50 p-6 rounded-xl border border-emerald-200">
-          <div className="text-4xl font-bold text-emerald-600 mb-2">
+        {/* Main Price Display */}
+        <div className="text-center bg-gradient-to-r from-emerald-50 to-teal-50 p-3 rounded-xl border border-emerald-200">
+          <div className="text-4xl font-bold text-emerald-600 mb-1">
             {formatPrice(prediction.estimated_market_value)}
           </div>
           <p className="text-gray-600">Estimated Market Value</p>
@@ -713,24 +893,29 @@ onChange={(e) => setHouseData(prev => ({ ...prev, servant_quarters: e.target.val
           </div>
         </div>
 
+        {/* Market Trend Indicator - Updated to use market_trend */}
         {prediction.market_trend && (
-          <div className="text-center p-3 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <span className="font-semibold">🏠 Market Segment: {prediction.market_trend}</span>
+          <div className="text-center p-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span className="font-semibold">
+              🏠 Market Segment: {prediction.market_trend}
+            </span>
           </div>
         )}
 
+        {/* Separator */}
         <div className="border-t border-gray-200"></div>
 
+        {/* Price Range - Updated to use low_estimate and high_estimate */}
         <div>
           <h3 className="text-lg font-semibold mb-3 text-gray-800">Price Range</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="text-center bg-gray-50 p-4 rounded-lg border border-gray-200">
+          <div className="grid grid-cols-2 gap-4">  
+            <div className="text-center bg-gray-50 p-2 rounded-lg border border-gray-200">
               <div className="text-xl font-bold text-emerald-600">
                 {formatPriceShort(prediction.low_estimate)}
               </div>
               <p className="text-sm text-gray-500 mt-1">Low Estimate</p>
             </div>
-            <div className="text-center bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <div className="text-center bg-gray-50 p-2 rounded-lg border border-gray-200">
               <div className="text-xl font-bold text-emerald-600">
                 {formatPriceShort(prediction.high_estimate)}
               </div>
@@ -739,141 +924,76 @@ onChange={(e) => setHouseData(prev => ({ ...prev, servant_quarters: e.target.val
           </div>
         </div>
 
+        {/* Per Marla Rate - New section */}
         {prediction.per_marla_rate && (
           <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-200">
-            <h3 className="text-lg font-semibold mb-2 text-gray-800">Rate Analysis</h3>
-            <p className="text-gray-700">Rate per Marla: <span className="font-bold text-emerald-600">{formatPrice(prediction.per_marla_rate)}</span></p>
+            <h3 className="text-lg font-semibold mb-1 text-gray-800">Rate Analysis</h3>
+            <p className="text-gray-700">
+              Rate per Marla: <span className="font-bold text-emerald-600">{formatPrice(prediction.per_marla_rate)}</span>
+            </p>
           </div>
         )}
 
-        {prediction.key_factors && (
-          <div>
-            <h3 className="text-lg font-semibold mb-3 text-gray-800">Key Factors</h3>
-            <div className="space-y-2">
-              {prediction.key_factors.split('; ').map((factor, idx) => (
-                <div key={idx} className="p-2 bg-gray-50 rounded-lg">
-                  <span className="text-sm text-gray-700">{factor}</span>
-                </div>
-              ))}
+        {/* Selected Features Display */}
+        {(houseData.furnished || houseData.gym || houseData.study_room || houseData.drawing_room || houseData.dining_room || houseData.lawn_garden || houseData.swimming_pool || houseData.electricity_backup || houseData.lounge_sitting || houseData.is_corner || houseData.facing_park || houseData.servant_quarters > 0 || houseData.store_rooms > 0) && (
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <h3 className="text-lg font-semibold mb-3 text-gray-800">Selected Features</h3>
+            <div className="flex flex-wrap gap-2">
+              {houseData.servant_quarters > 0 && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">{houseData.servant_quarters} Servant Quarters</span>}
+              {houseData.store_rooms > 0 && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">{houseData.store_rooms} Store Rooms</span>}
+              {houseData.furnished && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Furnished</span>}
+              {houseData.gym && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Gym</span>}
+              {houseData.study_room && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Study Room</span>}
+              {houseData.drawing_room && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Drawing Room</span>}
+              {houseData.dining_room && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Dining Room</span>}
+              {houseData.lawn_garden && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Lawn/Garden</span>}
+              {houseData.swimming_pool && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Swimming Pool</span>}
+              {houseData.electricity_backup && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Electricity Backup</span>}
+              {houseData.lounge_sitting && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Lounge/Sitting</span>}
+              {houseData.is_corner && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Corner Plot</span>}
+              {houseData.facing_park && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Facing Park</span>}
+              {houseData.number_of_floors > 0 && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">{houseData.number_of_floors} Floors</span>}
             </div>
           </div>
         )}
 
+          {/* BUTTON SECTION - Added here */}
+        <div className="flex gap-3 ">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleSavePrediction}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-emerald-600 text-emerald-600 rounded-xl font-semibold hover:bg-emerald-50 transition-all"
+          >
+            <Save className="w-4 h-4" />
+            Save Prediction
+          </motion.button>
+          
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleViewPropertiesInRange}
+            disabled={viewingProperties}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all"
+          >
+            {viewingProperties ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            ) : (
+              <Home className="w-4 h-4" />
+            )}
+            View Properties
+          </motion.button>
+        </div>
+
+        {/* Disclaimer */}
         <div className="text-xs text-gray-500 text-center bg-gray-50 p-3 rounded-lg border border-gray-200">
-          * This is an estimated value based on AI analysis of Lahore market data. Actual market conditions may vary.
+          * This is an estimated value based on AI analysis of Lahore market data.
+          Actual market conditions may vary.
         </div>
       </div>
     )}
-
-
-              {prediction && (
-  <div className="space-y-6">
-    {/* Main Price Display */}
-    <div className="text-center bg-gradient-to-r from-emerald-50 to-teal-50 p-6 rounded-xl border border-emerald-200">
-      <div className="text-4xl font-bold text-emerald-600 mb-2">
-        {formatPrice(prediction.estimated_market_value)}
-      </div>
-      <p className="text-gray-600">Estimated Market Value</p>
-      <div className="mt-2 inline-flex items-center gap-1 px-3 py-1 bg-emerald-100 rounded-full text-sm text-emerald-700">
-        <CheckCircle className="w-3 h-3" />
-        <span>{Math.round(prediction.confidence_percentage)}% Confidence</span>
-      </div>
-    </div>
-
-    {/* Market Trend Indicator - Updated to use market_trend */}
-    {prediction.market_trend && (
-      <div className="text-center p-3 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
-        <span className="font-semibold">
-          🏠 Market Segment: {prediction.market_trend}
-        </span>
-      </div>
-    )}
-
-    {/* Separator */}
-    <div className="border-t border-gray-200"></div>
-
-    {/* Price Range - Updated to use low_estimate and high_estimate */}
-    <div>
-      <h3 className="text-lg font-semibold mb-3 text-gray-800">Price Range</h3>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="text-center bg-gray-50 p-4 rounded-lg border border-gray-200">
-          <div className="text-xl font-bold text-emerald-600">
-            {formatPriceShort(prediction.low_estimate)}
-          </div>
-          <p className="text-sm text-gray-500 mt-1">Low Estimate</p>
-        </div>
-        <div className="text-center bg-gray-50 p-4 rounded-lg border border-gray-200">
-          <div className="text-xl font-bold text-emerald-600">
-            {formatPriceShort(prediction.high_estimate)}
-          </div>
-          <p className="text-sm text-gray-500 mt-1">High Estimate</p>
-        </div>
-      </div>
-    </div>
-
-    {/* Per Marla Rate - New section */}
-    {prediction.per_marla_rate && (
-      <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-200">
-        <h3 className="text-lg font-semibold mb-2 text-gray-800">Rate Analysis</h3>
-        <p className="text-gray-700">
-          Rate per Marla: <span className="font-bold text-emerald-600">{formatPrice(prediction.per_marla_rate)}</span>
-        </p>
-      </div>
-    )}
-
-    {/* Key Factors - Updated to handle key_factors string */}
-    {/* {prediction.key_factors && (
-      <div>
-        <h3 className="text-lg font-semibold mb-3 text-gray-800">Key Factors</h3>
-        <div className="space-y-2">
-          {prediction.key_factors.split('; ').map((factor, idx) => (
-            <div key={idx} className="p-2 bg-gray-50 rounded-lg">
-              <span className="text-sm text-gray-700">{factor}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    )} */}
-
-    {/* Prediction ID for reference */}
-    {/* {prediction.prediction_id && (
-      <div className="text-xs text-gray-400 text-center">
-        Prediction ID: {prediction.prediction_id}
-      </div>
-    )} */}
-
-    {/* Selected Features Display */}
-    {(houseData.furnished || houseData.gym || houseData.study_room || houseData.drawing_room || houseData.dining_room || houseData.lawn_garden || houseData.swimming_pool || houseData.electricity_backup || houseData.lounge_sitting || houseData.is_corner || houseData.facing_park || houseData.servant_quarters > 0 || houseData.store_rooms > 0) && (
-      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-        <h3 className="text-lg font-semibold mb-3 text-gray-800">Selected Features</h3>
-        <div className="flex flex-wrap gap-2">
-          {houseData.servant_quarters > 0 && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">{houseData.servant_quarters} Servant Quarters</span>}
-          {houseData.store_rooms > 0 && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">{houseData.store_rooms} Store Rooms</span>}
-          {houseData.furnished && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Furnished</span>}
-          {houseData.gym && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Gym</span>}
-          {houseData.study_room && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Study Room</span>}
-          {houseData.drawing_room && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Drawing Room</span>}
-          {houseData.dining_room && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Dining Room</span>}
-          {houseData.lawn_garden && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Lawn/Garden</span>}
-          {houseData.swimming_pool && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Swimming Pool</span>}
-          {houseData.electricity_backup && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Electricity Backup</span>}
-          {houseData.lounge_sitting && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Lounge/Sitting</span>}
-          {houseData.is_corner && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Corner Plot</span>}
-          {houseData.facing_park && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">Facing Park</span>}
-          {houseData.number_of_floors > 0 && <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-medium">{houseData.number_of_floors} Floors</span>}
-        </div>
-      </div>
-    )}
-
-    {/* Disclaimer */}
-    <div className="text-xs text-gray-500 text-center bg-gray-50 p-3 rounded-lg border border-gray-200">
-      * This is an estimated value based on AI analysis of Lahore market data.
-      Actual market conditions may vary.
-    </div>
   </div>
-)}
-            </div>
-          </motion.div>
+</motion.div>
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 // src/views/pages/Home.jsx
 import { Link } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'; 
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import { 
   TrendingUp, Home as HomeIcon, Search, BarChart3, Users, Award, 
@@ -13,7 +13,7 @@ import { useHouseListViewModel } from '../../viewmodels/useHouseListViewModel.js
 import { toast, Toaster } from 'sonner';
 
 export default function Home() {
-  // ✅ KEEP YOUR ORIGINAL API CALL
+  //  KEEP YOUR ORIGINAL API CALL
   const { houses, loading, error } = useHouseListViewModel();
   
   // State declarations
@@ -51,22 +51,44 @@ export default function Home() {
     ? displayedHouses.filter(h => h.price <= 30000000)
     : displayedHouses.filter(h => h.price > 30000000 && h.price <= 50000000);
   
-  const getHouseImage = (house, index) => {
-    if (house.images && house.images.length > 0) {
-      return house.images[0];
-    }
-    return imageUrls[index % imageUrls.length];
-  };
+const getHouseImage = (house, index) => {
+  //  Now primary_image will be available!
+  if (house.primary_image) {
+    return house.primary_image;
+  }
   
-  const toggleLike = (id) => {
-    if (likedHouses.includes(id)) {
-      setLikedHouses(likedHouses.filter(houseId => houseId !== id));
-      toast.info('Removed from favorites');
-    } else {
-      setLikedHouses([...likedHouses, id]);
-      toast.success('Added to favorites!');
-    }
-  };
+  // Fallback images
+  const fallbackImages = [
+    'https://images.unsplash.com/photo-1622015663381-d2e05ae91b72?w=600&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1668911495278-487418f8f72d?w=600&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1721815693498-cc28507c0ba2?w=600&h=400&fit=crop',
+  ];
+  
+  return fallbackImages[house.id % fallbackImages.length];
+};
+// If you don't have this component, create it or use regular img tag
+const ImageWithFallback = ({ src, alt, className, fallbackSrc }) => {
+  const [imgSrc, setImgSrc] = useState(src);
+  
+  useEffect(() => {
+    setImgSrc(src);
+  }, [src]);
+  
+  return (
+    <img
+      src={imgSrc}
+      alt={alt}
+      className={className}
+      onError={() => {
+        console.log('Image failed to load:', imgSrc);
+        if (fallbackSrc) {
+          setImgSrc(fallbackSrc);
+        }
+      }}
+    />
+  );
+};
   
   // Mouse move effect
   useEffect(() => {
@@ -467,6 +489,27 @@ export default function Home() {
       ))}
     </div>
   </motion.div>
+  {/* Show message when filtered properties are empty */}
+{!hasNoHouses && filteredHouses.length === 0 && (
+  <div className="text-center rounded-2xl">
+    <motion.div
+      animate={{ y: [0, -10, 0] }}
+      transition={{ duration: 2, repeat: Infinity }}
+      className="inline-block mb-4"
+    >
+      <HomeIcon className="w-20 h-20 text-gray-400 mx-auto" />
+    </motion.div>
+    <p className="text-gray-500 text-2xl mb-2">
+      No {selectedCategory === 'all' ? 'properties' : selectedCategory} properties found
+    </p>
+    <p className="text-gray-400 ">
+      {selectedCategory === 'all' 
+        ? 'No properties are available at the moment' 
+        : `Try selecting a different category`}
+    </p>
+  
+  </div>
+)}
   
   {/* Show when NO properties available */}
   {hasNoHouses && (
@@ -499,7 +542,7 @@ export default function Home() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
           transition={{ duration: 0.5 }}
-          className="grid md:grid-cols-2 lg:grid-cols-3 gap-8"
+          className="grid md:grid-cols-2 lg:grid-cols-4 gap-8"
         >
           {filteredHouses.map((house, index) => (
             <motion.div
@@ -512,17 +555,21 @@ export default function Home() {
             >
               <div className="bg-white rounded-3xl shadow-xl hover:shadow-2xl transition-all overflow-hidden border-2 border-emerald-100">
                 {/* Image Section */}
-                <div className="relative h-64 overflow-hidden">
+                <div className="relative h-48 overflow-hidden">
                   <motion.div
                     whileHover={{ scale: 1.15 }}
                     transition={{ duration: 0.5 }}
                     className="w-full h-full"
                   >
-                    <ImageWithFallback
-                      src={getHouseImage(house, index)}
-                      alt={house.title}
-                      className="w-full h-full object-cover"
-                    />
+          <img
+  src={getHouseImage(house, index)}
+  alt={house.title}
+  className="w-full h-full object-contain"
+  onError={(e) => {
+    console.error('Image failed to load:', e.target.src);
+    e.target.src = 'https://images.unsplash.com/photo-1622015663381-d2e05ae91b72?w=600&h=400&fit=crop';
+  }}
+/>
                   </motion.div>
                   
                   {/* Overlay */}
@@ -561,13 +608,13 @@ export default function Home() {
                     initial={{ x: -100 }}
                     animate={{ x: 0 }}
                     transition={{ delay: index * 0.1 }}
-                    className="absolute top-4 right-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-4 py-2 rounded-full font-bold shadow-xl"
+                    className="absolute top-2 right-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-4 py-2 rounded-full font-bold shadow-xl"
                   >
                     {house.marla} Marla
                   </motion.div>
                   
                   {/* "NEW" badge */}
-                  {house.yearBuilt && house.yearBuilt >= 2023 && (
+                  {house.yearBuilt && house.yearBuilt >= 2025 && (
                     <motion.div
                       animate={{ scale: [1, 1.1, 1] }}
                       transition={{ duration: 1.5, repeat: Infinity }}
@@ -579,17 +626,17 @@ export default function Home() {
                 </div>
                 
                 {/* Content Section */}
-                <div className="p-6">
-                  <h3 className="font-bold text-xl text-gray-900 mb-3 group-hover:text-emerald-600 transition-colors line-clamp-1">
+                <div className="p-4">
+                  <h3 className="font-bold text-xl text-gray-900 mb-1 group-hover:text-emerald-600 transition-colors line-clamp-1">
                     {house.title}
                   </h3>
                   
-                  <div className="flex items-center gap-2 text-gray-600 mb-4">
+                  <div className="flex items-center gap-2 text-gray-600 mb-2">
                     <MapPin className="w-4 h-4 text-emerald-600" />
-                    <span className="text-sm font-medium">{house.area}</span>
+                    <span className="text-sm font-medium">{house.location_name }</span>
                   </div>
                   
-                  <div className="flex items-center gap-6 text-sm text-gray-600 mb-4">
+                  <div className="flex items-center gap-6 text-sm text-gray-600 mb-2">
                     <motion.div whileHover={{ scale: 1.1 }} className="flex items-center gap-2">
                       <Bed className="w-5 h-5 text-emerald-600" />
                       <span className="font-medium">{house.bedrooms}</span>
@@ -606,10 +653,10 @@ export default function Home() {
                     )}
                   </div>
                   
-                  <div className="pt-4 border-t border-gray-200">
+                  <div className="pt-2 border-t border-gray-200">
                     <motion.div 
                       whileHover={{ scale: 1.05 }}
-                      className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent"
+                      className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent"
                     >
                       PKR {(house.price / 10000000).toFixed(1)} Cr
                     </motion.div>

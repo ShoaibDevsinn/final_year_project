@@ -19,6 +19,8 @@ export const useHouseDetailViewModel = (id) => {
       
       const response = await listingService.getListing(id);
       
+      console.log('API Response:', response); // Debug log
+      
       // Handle different response structures
       let houseData;
       if (response.success && response.data) {
@@ -29,27 +31,61 @@ export const useHouseDetailViewModel = (id) => {
         houseData = response;
       }
       
+      console.log('Processed house data:', houseData); // Debug log
+      
       // Transform API data to match component expectations
       const transformedHouse = {
-        id: houseData.id,
-        title: houseData.title || `${houseData.marla} Marla House in ${houseData.location}`,
-        area: houseData.location,
-        location: houseData.city || 'Lahore',
-        marla: houseData.area_marla,
-        bedrooms: houseData.bedrooms,
-        bathrooms: houseData.bathrooms,
-        kitchen: houseData.kitchens,
+        id: houseData.listing_id || houseData.id,
+        title: houseData.title || `${houseData.area_marla} Marla Property in ${houseData.location_name}`,
+        area: houseData.location_name, // Using location_name for area
+        location: houseData.location_name || 'Lahore',
+        marla: parseFloat(houseData.area_marla),
+        bedrooms: houseData.bedrooms || 0,
+        bathrooms: houseData.bathrooms || 0,
+        kitchen: houseData.kitchens || 0,
         yearBuilt: houseData.construction_year,
-        price: houseData.price || calculateEstimatedPrice(houseData),
-        pricePerMarla: houseData.price ? houseData.price / houseData.area_marla : 0,
+        price: parseFloat(houseData.price) || 0,
+        pricePerMarla: houseData.current_per_marla_rate ? parseFloat(houseData.current_per_marla_rate) : 
+                      (houseData.price ? parseFloat(houseData.price) / parseFloat(houseData.area_marla) : 0),
         description: houseData.description || generateDescription(houseData),
-        hasGarage: houseData.garage || false,
-        hasGarden: houseData.lawn_garden || false,
-        hasRoofAccess: houseData.roof_access || false,
-        furnished: houseData.furnished || false,
-        features: extractFeatures(houseData),
-        // Store raw data for additional fields
-        ...houseData
+        // Property status
+        status: houseData.property_status,
+        statusDisplay: houseData.property_status_display,
+        propertyType: houseData.property_type,
+        propertyTypeDisplay: houseData.property_type_display,
+        // Features based on actual API response fields
+        hasGarage: houseData.has_parking || false,
+        hasGarden: houseData.has_lawn || false,
+        hasSwimmingPool: houseData.has_swimming_pool || false,
+        hasGym: houseData.has_gym || false,
+        hasSecurity: houseData.has_security || false,
+        hasElectricityBackup: houseData.has_electricity_backup || false,
+        hasServantQuarter: houseData.has_servant_quarter || false,
+        furnished: houseData.is_furnished || false,
+        isCornerPlot: houseData.is_corner_plot || false,
+        isFacingPark: houseData.is_facing_park || false,
+        // Room details
+        livingRooms: houseData.has_living_room ? 1 : 0,
+        diningRooms: houseData.has_dining_room ? 1 : 0,
+        studyRooms: houseData.has_study_room ? 1 : 0,
+        servantRooms: houseData.servant_rooms || 0,
+        storeRooms: houseData.store_rooms || 0,
+        // Other details
+        numberOfFloors: houseData.number_of_floors || 1,
+        constructionYear: houseData.construction_year,
+        customFeatures: houseData.custom_features,
+        customFeaturesList: houseData.custom_features_list || [],
+        amenities: houseData.amenities || [],
+        // Images
+        primaryImage: houseData.primary_image,
+        images: houseData.images || [],
+        // Creator info
+        createdBy: houseData.created_by,
+        createdByName: houseData.created_by_name,
+        createdAt: houseData.created_at,
+        updatedAt: houseData.updated_at,
+        // Extract features array for display
+        features: extractFeatures(houseData)
       };
       
       setHouse(transformedHouse);
@@ -61,69 +97,84 @@ export const useHouseDetailViewModel = (id) => {
     }
   };
 
-  // Helper function to calculate estimated price if not provided
-  const calculateEstimatedPrice = (data) => {
-    // This is a basic calculation - you can enhance it
-    let estimatedPrice = data.area_marla * 5000000; // Base 5M per marla
-    
-    // Adjust based on features
-    if (data.furnished) estimatedPrice *= 1.1;
-    if (data.lawn_garden) estimatedPrice *= 1.05;
-    if (data.swimming_pool) estimatedPrice *= 1.15;
-    if (data.corner_plot) estimatedPrice *= 1.08;
-    if (data.facing_park) estimatedPrice *= 1.04;
-    
-    return Math.round(estimatedPrice);
-  };
-
   // Generate description from data
   const generateDescription = (data) => {
-    let description = `Beautiful ${data.area_marla} marla house located in ${data.location}. `;
-    description += `This property features ${data.bedrooms} bedrooms, ${data.bathrooms} bathrooms, and ${data.kitchens} kitchen(s). `;
+    let description = `Beautiful ${data.area_marla} marla property located in ${data.location_name}. `;
+    description += `This ${data.property_type_display || data.property_type} features ${data.bedrooms} bedrooms, ${data.bathrooms} bathrooms, and ${data.kitchens} kitchen(s). `;
     
-    if (data.furnished) description += `The house is fully furnished. `;
-    if (data.lawn_garden) description += `It includes a beautiful lawn/garden. `;
-    if (data.swimming_pool) description += `A swimming pool adds to the luxury. `;
+    if (data.is_furnished) description += `The property is fully furnished. `;
+    if (data.has_lawn) description += `It includes a beautiful lawn/garden. `;
+    if (data.has_swimming_pool) description += `A swimming pool adds to the luxury. `;
+    if (data.has_parking) description += `Parking space is available. `;
+    if (data.is_corner_plot) description += `This is a corner plot. `;
+    if (data.is_facing_park) description += `The property faces a park. `;
     
-    description += `Built in ${data.construction_year}, this property offers modern amenities and comfortable living.`;
+    if (data.construction_year) {
+      description += `Built in ${data.construction_year}, this property offers modern amenities and comfortable living.`;
+    }
+    
+    if (data.custom_features) {
+      description += ` Additional features: ${data.custom_features}.`;
+    }
     
     return description;
   };
 
-  // Extract features from data
+  // Extract features from data based on actual API response
   const extractFeatures = (data) => {
     const features = [];
-    if (data.furnished) features.push('Fully Furnished');
-    if (data.gym) features.push('Gym Facility');
-    if (data.study_room) features.push('Study Room');
-    if (data.drawing_room) features.push('Drawing Room');
-    if (data.dining_room) features.push('Dining Room');
-    if (data.lawn_garden) features.push('Lawn/Garden');
-    if (data.swimming_pool) features.push('Swimming Pool');
-    if (data.electricity_backup) features.push('Electricity Backup');
-    if (data.lounge_sitting) features.push('Lounge/Sitting Area');
-    if (data.corner_plot) features.push('Corner Plot');
-    if (data.facing_park) features.push('Facing Park');
+    
+    // Basic features
+    if (data.is_furnished) features.push('Fully Furnished');
+    if (data.has_parking) features.push('Parking');
+    if (data.has_lawn) features.push('Lawn/Garden');
+    if (data.has_swimming_pool) features.push('Swimming Pool');
+    if (data.has_gym) features.push('Gym Facility');
+    if (data.has_security) features.push('Security System');
+    if (data.has_electricity_backup) features.push('Electricity Backup');
+    if (data.has_servant_quarter) features.push('Servant Quarter');
+    if (data.is_corner_plot) features.push('Corner Plot');
+    if (data.is_facing_park) features.push('Facing Park');
+    
+    // Room features
+    if (data.has_living_room) features.push('Living Room');
+    if (data.has_dining_room) features.push('Dining Room');
+    if (data.has_study_room) features.push('Study Room');
+    
+    // Custom features
+    if (data.custom_features_list && Array.isArray(data.custom_features_list)) {
+      features.push(...data.custom_features_list);
+    } else if (data.custom_features) {
+      features.push(data.custom_features);
+    }
+    
+    // Amenities
+    if (data.amenities && Array.isArray(data.amenities)) {
+      features.push(...data.amenities);
+    }
+    
     return features;
   };
 
   const formatPrice = (price) => {
-    if (!price) return 'PKR 0';
-    if (price >= 10000000) {
-      return `PKR ${(price / 10000000).toFixed(2)} Cr`;
+    if (!price || price === 0) return 'PKR 0';
+    const numPrice = typeof price === 'string' ? parseFloat(price) : price;
+    if (numPrice >= 10000000) {
+      return `PKR ${(numPrice / 10000000).toFixed(2)} Cr`;
     }
-    if (price >= 100000) {
-      return `PKR ${(price / 100000).toFixed(1)} Lakh`;
+    if (numPrice >= 100000) {
+      return `PKR ${(numPrice / 100000).toFixed(2)} Lakh`;
     }
-    return `PKR ${price.toLocaleString()}`;
+    return `PKR ${numPrice.toLocaleString()}`;
   };
 
   const formatNumber = (num) => {
     if (!num) return '0';
-    return num.toLocaleString('en-PK');
+    const numValue = typeof num === 'string' ? parseFloat(num) : num;
+    return numValue.toLocaleString('en-PK');
   };
 
-  const propertyAge = house ? new Date().getFullYear() - house.yearBuilt : 0;
+  const propertyAge = house && house.yearBuilt ? new Date().getFullYear() - house.yearBuilt : 0;
   
   const propertyCondition = {
     label: propertyAge <= 2 ? 'New Construction' : 
@@ -140,7 +191,7 @@ export const useHouseDetailViewModel = (id) => {
   };
 
   return {
-    house,  
+    house,
     loading,
     error,
     formatPrice,

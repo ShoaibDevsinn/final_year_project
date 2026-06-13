@@ -59,7 +59,7 @@ export function Navbar() {
         });
       }
       
-      setIsLoading(false); // ✅ Done loading
+      setIsLoading(false); //  Done loading
     };
     
     checkAuth();
@@ -116,7 +116,7 @@ export function Navbar() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [isProfileOpen]);
 
-  // ✅ Show simple loading state
+  // Show simple loading state
   if (isLoading) {
     return (
       <nav className="w-full bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-lg sticky top-0 z-50">

@@ -31,12 +31,38 @@ export const usePredictionViewModel = () => {
       
       const response = await predictionService.predictPrice(transformedData);
       
-      // ✅ FIX: Return the response directly (not response.data)
-      // Because predictionService.predictPrice already returns response.data
+      // Return the response directly
       return response;
     } catch (error) {
       console.error('ViewModel error:', error);
-      throw error;
+      
+      //  FIX: Properly format and re-throw the error
+      // This ensures the error from predictionService reaches the component
+      if (error.response) {
+        // If it's an axios error with response
+        throw {
+          success: false,
+          message: error.response.data?.message || error.response.data?.detail || 'Prediction failed',
+          errors: error.response.data?.errors || {}
+        };
+      } else if (error.errors) {
+        // If it's already formatted from predictionService
+        throw error;
+      } else if (error.message) {
+        // Simple error message
+        throw {
+          success: false,
+          message: error.message,
+          errors: {}
+        };
+      } else {
+        // Unknown error
+        throw {
+          success: false,
+          message: 'An unexpected error occurred',
+          errors: {}
+        };
+      }
     }
   };
   

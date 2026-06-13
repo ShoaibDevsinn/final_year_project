@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/navbar';
 import { 
   User, Trash2, MapPin, Home, Calendar, Award, Sparkles, Camera,
-  Mail, Lock, Eye, EyeOff, CheckCircle, Edit2, X, LogOut
+  Mail, Lock, Eye, EyeOff, CheckCircle, Edit2, X, LogOut,
+  Bed, Bath, Ruler, Building2, Users, Archive  
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast, Toaster } from 'sonner';
@@ -39,6 +40,7 @@ export default function UserProfile() {
 // Forgot Password Modal Component
 const ForgotPasswordModal = ({ isOpen, onClose }) => {
   const [step, setStep] = useState(1);
+  const [validationErrors, setValidationErrors] = useState({});
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -332,7 +334,7 @@ const fetchPredictionHistory = async () => {
     const response = await predictionService.getPredictionHistory();
     console.log('Prediction history response:', response);
     
-    // ✅ FIX: Get predictions from response.predictions (not response.data)
+    // Get predictions from response
     let predictionsList = [];
     if (response.predictions && Array.isArray(response.predictions)) {
       predictionsList = response.predictions;
@@ -345,25 +347,60 @@ const fetchPredictionHistory = async () => {
     }
     
     console.log('Predictions list:', predictionsList);
+    console.log('First prediction all fields:', predictionsList[0]);
     
- const formattedPredictions = predictionsList.map(pred => ({
-  id: pred.prediction_id || pred.id,  // Use prediction_id from API
-  area: pred.location || pred.area || 'Unknown',
-  marla: pred.area_marla || pred.marla || 0,
-  bedrooms: pred.bedrooms || 0,
-  bathrooms: pred.bathrooms || 0,
-  kitchen: pred.kitchens || pred.kitchen || 0,
-  predictedPrice: pred.predicted_price || pred.predictedPrice || 0,
-  pricePerMarla: pred.per_marla_rate || (pred.predicted_price / pred.area_marla) || 0,
-  date: pred.created_at || pred.date || new Date().toISOString(),
-  furnished: pred.is_furnished || false,
-  hasGarage: false,
-  hasGarden: pred.has_lawn || false,
-  hasRoofAccess: false
-}));
-console.log('Sample prediction:', formattedPredictions[0]);
+    // Format predictions with ALL fields from backend
+    const formattedPredictions = predictionsList.map(pred => ({
+      id: pred.prediction_id,
+      
+      // Basic Info
+      area: pred.location || 'Unknown',
+      marla: pred.area_marla || 0,
+      bedrooms: pred.bedrooms || 0,
+      bathrooms: pred.bathrooms || 0,
+      kitchen: pred.kitchens || 0,
+      
+      // Property Details
+      construction_year: pred.construction_year || 'N/A',
+      number_of_floors: pred.number_of_floors || 1,
+      servant_rooms: pred.servant_rooms || 0,
+      store_rooms: pred.store_rooms || 0,
+      
+      // Special Features
+      is_corner_plot: pred.is_corner_plot || false,
+      is_facing_park: pred.is_facing_park || false,
+      
+      // Amenities - ALL of them
+      furnished: pred.is_furnished || false,
+      hasGarage: pred.has_parking || pred.has_garage || false,
+      hasGarden: pred.has_lawn || false,
+      has_swimming_pool: pred.has_swimming_pool || false,
+      has_gym: pred.has_gym || false,
+      has_study_room: pred.has_study_room || false,
+      has_drawing_room: pred.has_drawing_room || false,
+      has_dining_room: pred.has_dining_room || false,
+      has_living_room: pred.has_living_room || false,
+      has_electricity_backup: pred.has_electricity_backup || false,
+      has_lounge_sitting: pred.has_lounge || false,
+      has_security: pred.has_security || false,
+      has_servant_quarter: pred.has_servant_quarter || false,
+      has_roof_access: pred.has_roof_access || false,
+      
+      // Price Results
+      predictedPrice: pred.predicted_price || 0,
+      low_estimate: pred.low_estimate || 0,
+      high_estimate: pred.high_estimate || 0,
+      confidence_score: pred.confidence_score || 85,
+      market_trend: pred.market_trend || 'Mid-Range',
+      key_factors: pred.key_factors || '',
+      pricePerMarla: pred.per_marla_rate || 0,
+      
+      // Metadata
+      date: pred.created_at || new Date().toISOString(),
+    }));
+    
+    console.log('Formatted predictions:', formattedPredictions);
     setPredictions(formattedPredictions);
-    console.log('Predictions state after set:', formattedPredictions.length);
   } catch (error) {
     console.error('Error fetching predictions:', error);
     setPredictions([]);
@@ -407,7 +444,7 @@ console.log('Sample prediction:', formattedPredictions[0]);
   }
 };
 
-  const handleSaveName = async () => {
+const handleSaveName = async () => {
   if (userName.trim() === '') {
     toast.error('Name cannot be empty');
     return;
@@ -417,14 +454,55 @@ console.log('Sample prediction:', formattedPredictions[0]);
     const response = await authService.updateUsername(userName);
     if (response.success) {
       setIsEditingName(false);
+      setValidationErrors({});
       toast.success(`Name updated to ${userName}! 🎉`);
+      
+      const user = authService.getCurrentUser();
+      if (user) {
+        user.username = userName;
+        localStorage.setItem('user', JSON.stringify(user));
+      }
+    } else {
+      toast.error(response.message || 'Failed to update name');
     }
   } catch (error) {
-    toast.error(error.message || 'Failed to update name');
+    console.error('Name update error:', error);
+    
+    let errorMessage = 'Failed to update name';
+    
+    // Handle "PRO FEATURE ONLY" error
+    if (error.message === 'PRO FEATURE ONLY') {
+      errorMessage = 'Username update is a pro feature. Please upgrade your account.';
+      toast.info('✨ Upgrade to Pro to change your username');
+    } 
+    // Handle username already exists error
+    else if (error.errors?.new_username) {
+      errorMessage = error.errors.new_username[0];
+      setValidationErrors({ username: errorMessage });
+    }
+    // Handle other field errors
+    else if (error.errors) {
+      const firstKey = Object.keys(error.errors)[0];
+      errorMessage = error.errors[firstKey][0];
+      setValidationErrors({ [firstKey]: errorMessage });
+    }
+    // Handle string error
+    else if (typeof error === 'string') {
+      errorMessage = error;
+    }
+    // Handle message property
+    else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    toast.error(`❌ ${errorMessage}`);
+    
+    // Clear validation error after 5 seconds
+    setTimeout(() => setValidationErrors({}), 5000);
   }
 };
 
-  const handleSaveEmail = async () => {
+ const handleSaveEmail = async () => {
   if (tempNewEmail.trim() === '') {
     toast.error('Email cannot be empty');
     return;
@@ -440,17 +518,55 @@ console.log('Sample prediction:', formattedPredictions[0]);
       setUserEmail(tempNewEmail);
       setIsEditingEmail(false);
       setTempNewEmail('');
+      setValidationErrors({});
       toast.success(`Email updated to ${tempNewEmail}! 📧`);
       
-      // Update stored user data
       const user = authService.getCurrentUser();
       if (user) {
         user.email = tempNewEmail;
         localStorage.setItem('user', JSON.stringify(user));
       }
+    } else {
+      toast.error(response.message || 'Failed to update email');
     }
   } catch (error) {
-    toast.error(error.message || 'Failed to update email');
+    console.error('Email update error:', error);
+    
+    let errorMessage = 'Failed to update email';
+    
+    // Handle "PRO FEATURE ONLY" error
+    if (error.message === 'PRO FEATURE ONLY') {
+      errorMessage = 'Email update is a pro feature. Please upgrade your account.';
+      toast.info('✨ Upgrade to Pro to change your email');
+    }
+    // Handle email already exists error
+    else if (error.errors?.email) {
+      errorMessage = error.errors.email[0];
+      setValidationErrors({ email: errorMessage });
+    }
+    else if (error.errors?.new_email) {
+      errorMessage = error.errors.new_email[0];
+      setValidationErrors({ email: errorMessage });
+    }
+    // Handle other field errors
+    else if (error.errors) {
+      const firstKey = Object.keys(error.errors)[0];
+      errorMessage = error.errors[firstKey][0];
+      setValidationErrors({ [firstKey]: errorMessage });
+    }
+    // Handle string error
+    else if (typeof error === 'string') {
+      errorMessage = error;
+    }
+    // Handle message property
+    else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    toast.error(`❌ ${errorMessage}`);
+    
+    // Clear validation error after 5 seconds
+    setTimeout(() => setValidationErrors({}), 5000);
   }
 };
 
@@ -463,6 +579,7 @@ const cancelEmailEdit = () => {
 const handleSavePassword = async () => {
   // Clear previous validation states
   setValidationErrors({});
+  setIsCurrentPasswordValid(true);
   
   // Validation checks
   if (!tempCurrentPassword) {
@@ -495,53 +612,95 @@ const handleSavePassword = async () => {
       setIsCurrentPasswordValid(true);
       setValidationErrors({});
       toast.success('Password updated successfully! 🔒');
+    } else {
+      // Handle case where response.success is false
+      toast.error(response.message || 'Failed to update password');
     }
   } catch (error) {
     console.log('Full error object:', error);
+    console.log('Error response data:', error.response?.data);
     
-    // ✅ Check for message field (for old password incorrect)
-    if (error.message) {
-      if (error.message.toLowerCase().includes('old password is incorrect')) {
-        setIsCurrentPasswordValid(false);
-        toast.error('❌ Current password is incorrect');
-      } else {
-        toast.error(`❌ ${error.message}`);
+    // IMPROVED ERROR HANDLING
+    let errorMessage = 'Failed to update password';
+    
+    // Case 1: error.response.data (axios error)
+    if (error.response && error.response.data) {
+      const errorData = error.response.data;
+      console.log('Error data from response:', errorData);
+      
+      // Check for field-specific errors
+      if (errorData.errors) {
+        const errors = errorData.errors;
+        
+        if (errors.old_password) {
+          errorMessage = errors.old_password[0];
+          setIsCurrentPasswordValid(false);
+        } else if (errors.new_password) {
+          errorMessage = errors.new_password[0];
+          setValidationErrors({ new_password: errors.new_password });
+        } else if (errors.non_field_errors) {
+          errorMessage = errors.non_field_errors[0];
+        } else {
+          const firstKey = Object.keys(errors)[0];
+          errorMessage = errors[firstKey][0];
+        }
+      }
+      // Check for message field
+      else if (errorData.message) {
+        errorMessage = errorData.message;
+        if (errorMessage.toLowerCase().includes('old password') || 
+            errorMessage.toLowerCase().includes('current password')) {
+          setIsCurrentPasswordValid(false);
+        }
+      }
+      // Check for detail field
+      else if (errorData.detail) {
+        errorMessage = errorData.detail;
+      }
+      // Check if errorData is a string
+      else if (typeof errorData === 'string') {
+        errorMessage = errorData;
       }
     }
-    // ✅ Check for errors object
-    else if (error.errors) {
-      if (error.errors.old_password) {
+    // Case 2: error.message
+    else if (error.message) {
+      errorMessage = error.message;
+      if (errorMessage.toLowerCase().includes('old password') || 
+          errorMessage.toLowerCase().includes('current password')) {
         setIsCurrentPasswordValid(false);
-        toast.error(`❌ ${error.errors.old_password[0]}`);
-      } else if (error.errors.new_password) {
-        setValidationErrors({ new_password: error.errors.new_password });
-        toast.error(`❌ ${error.errors.new_password[0]}`);
-      } else if (error.errors.non_field_errors) {
-        toast.error(`❌ ${error.errors.non_field_errors[0]}`);
-      } else {
-        const firstKey = Object.keys(error.errors)[0];
-        toast.error(`❌ ${error.errors[firstKey][0]}`);
       }
     }
-    // ✅ Check for direct string error
+    // Case 3: error is a string
     else if (typeof error === 'string') {
-      toast.error(`❌ ${error}`);
+      errorMessage = error;
     }
-    else {
-      toast.error('❌ Failed to update password');
-    }
-    console.log('Error object:', error);
-console.log('Error type:', typeof error);
-console.log('Error keys:', error ? Object.keys(error) : 'null');
+    
+    toast.error(`❌ ${errorMessage}`);
   }
 };
 
- const cancelPasswordEdit = () => {
+const cancelPasswordEdit = () => {
   setIsEditingPassword(false);
   setTempPassword('');
   setTempConfirmPassword('');
   setTempCurrentPassword('');
   setIsCurrentPasswordValid(true);
+  setValidationErrors({}); 
+};
+
+const formatPrice = (price) => {
+  if (price >= 10000000) {
+    return `${(price / 10000000).toFixed(2)} Cr`;
+  }
+  return `${(price / 100000).toFixed(2)} Lac`;
+};
+
+// Helper function to format price with PKR
+const formatPriceWithPKR = (price) => {
+  if (price >= 10000000) {
+    return `PKR ${(price / 10000000).toFixed(2)} Cr`;
+  }
+  return `PKR ${(price / 100000).toFixed(2)} Lac`;
 };
 
   if (loading) {
@@ -619,13 +778,18 @@ console.log('Error keys:', error ? Object.keys(error) : 'null');
   {isEditingName ? (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        <input
-          type="text"
-          value={userName}
-          onChange={(e) => setUserName(e.target.value)}
-          className="px-4 py-2 border-2 text-xl font-semibold w-80 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-          autoFocus
-        />
+       <input
+  type="text"
+  value={userName}
+  onChange={(e) => setUserName(e.target.value)}
+  className={`px-4 py-2 text-xl font-semibold w-80 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 caret-emerald-500 ${
+    validationErrors.username ? 'border-red-500' : 'border-gray-300'
+  }`}
+  autoFocus
+/>
+{validationErrors.username && (
+  <p className="text-red-500 text-xs mt-1">{validationErrors.username}</p>
+)}
       </div>
       <div className="flex items-center gap-2">
         <button onClick={handleSaveName} className="px-4 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm">
@@ -665,14 +829,19 @@ console.log('Error keys:', error ? Object.keys(error) : 'null');
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <Mail className="w-5 h-5 text-gray-400" />
-        <input
-          type="email"
-          value={tempNewEmail || userEmail}
-          onChange={(e) => setTempNewEmail(e.target.value)}
-          placeholder="New email"
-          className="px-4 py-2 border-2 border-blue-300 rounded-xl text-base w-80 focus:ring-2 focus:ring-emerald-500"
-        />
+       <input
+  type="email"
+  value={tempNewEmail || userEmail}
+  onChange={(e) => setTempNewEmail(e.target.value)}
+  placeholder="New email"
+  className={`px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 caret-emerald-500 text-base w-80 ${
+    validationErrors.email ? 'border-red-500' : 'border-gray-300'
+  }`}
+/>
       </div>
+      {validationErrors.email && (
+        <p className="text-red-500 text-xs mt-1">{validationErrors.email}</p>
+      )}
       <div className="flex items-center gap-2 pl-7">
         <button onClick={handleSaveEmail} className="px-4 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm">
           Save
@@ -716,7 +885,7 @@ console.log('Error keys:', error ? Object.keys(error) : 'null');
               // Reset validation state when user types
               setIsCurrentPasswordValid(true);
             }}
-            className={`px-4 py-2 border-2 rounded-xl focus:ring-2 focus:ring-blue-500 text-base w-80 ${
+            className={`px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 caret-emerald-500 text-base w-80 ${
               !isCurrentPasswordValid ? 'border-red-500' : 'border-blue-300'
             }`}
             placeholder="Current password"
@@ -753,12 +922,12 @@ console.log('Error keys:', error ? Object.keys(error) : 'null');
         setTempPassword(e.target.value);
         setValidationErrors({}); // Clear validation errors when user types
       }}
-      className={`px-4 py-2 border-2 rounded-xl focus:ring-2 focus:ring-blue-500 text-base w-full ${
+      className={`px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 caret-emerald-500 text-base w-full ${
         validationErrors.new_password ? 'border-red-500' : 'border-blue-300'
       }`}
       placeholder="New password (min 8 characters)"
     />
-    {/* ✅ ADD THIS - Show validation errors below the input */}
+    {/*  ADD THIS - Show validation errors below the input */}
     {validationErrors.new_password && (
       <div className="mt-2 space-y-1">
         {validationErrors.new_password.map((err, idx) => (
@@ -775,7 +944,7 @@ console.log('Error keys:', error ? Object.keys(error) : 'null');
           type={showPassword ? "text" : "password"}
           value={tempConfirmPassword}
           onChange={(e) => setTempConfirmPassword(e.target.value)}
-          className="px-4 py-2 border-2 border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base w-80"
+          className="px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 caret-emerald-500 text-base w-80"
           placeholder="Confirm new password"
         />
       </div>
@@ -843,7 +1012,7 @@ console.log('Error keys:', error ? Object.keys(error) : 'null');
             <h2 className="text-3xl font-semibold text-gray-800">Saved Predictions</h2>
           </div>
 
-          {predictions.length === 0 ? (
+   {predictions.length === 0 ? (
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -867,107 +1036,164 @@ console.log('Error keys:', error ? Object.keys(error) : 'null');
               </a>
             </motion.div>
           ) : (
-            <div className="space-y-4">
-              <AnimatePresence>
-                {predictions
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                  .map((prediction, index) => (
-                    <motion.div
-                      key={prediction.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 20 }}
-                      transition={{ delay: index * 0.05 }}
-                      whileHover={{ scale: 1.01, x: 5 }}
-                      className="border-2 border-gray-200 rounded-xl p-6 hover:shadow-xl transition-all hover:border-emerald-300"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-3">
-                            <MapPin className="w-5 h-5 text-emerald-600" />
-                            <span className="font-bold text-xl text-gray-900">{prediction.area}</span>
-                            <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-sm rounded-full font-semibold">
-                              {prediction.marla} Marla
-                            </span>
-                          </div>
+    <div className="space-y-4">
+      <AnimatePresence>
+        {predictions
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+          .map((prediction, index) => (
+            <motion.div
+              key={prediction.id}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ delay: index * 0.05 }}
+              whileHover={{ scale: 1.01 }}
+              className="border-2 border-gray-200 rounded-xl overflow-hidden hover:shadow-xl transition-all hover:border-emerald-300"
+            >
+              {/* Header - Gradient Background */}
+              <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-white" />
+                    <span className="text-white font-bold text-xl">{prediction.area}</span>
+                  </div>
+                </div>
+              </div>
 
-                          <div className="grid md:grid-cols-3 gap-4 mb-4">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm text-gray-600">Bedrooms:</span>
-                              <span className="font-bold text-gray-900">{prediction.bedrooms}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm text-gray-600">Bathrooms:</span>
-                              <span className="font-bold text-gray-900">{prediction.bathrooms}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm text-gray-600">Kitchen:</span>
-                              <span className="font-bold text-gray-900">{prediction.kitchen}</span>
-                            </div>
-                          </div>
+              {/* Content */}
+              <div className="p-5">
+                {/* Property Details Grid */}
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-4">
+                   <div>
+                    <div className="text-xm text-gray-400">Area Size</div>
+                    <div className="text-lg font-semibold text-gray-800">{prediction.marla} Marla</div>
+                  </div>
+                   <div>
+                    <div className="text-xm text-gray-400">Beds</div>
+                    <div className="text-lg font-semibold text-gray-800">{prediction.bedrooms}</div>
+                  </div>
+                   <div>
+                    <div className="text-xm text-gray-400">Baths</div>
+                    <div className="text-lg font-semibold text-gray-800">{prediction.bathrooms}</div>
+                  </div>
+                   <div>
+                    <div className="text-xm text-gray-400">Kitchen</div>
+                    <div className="text-lg font-semibold text-gray-800">{prediction.kitchen}</div>
+                  </div>
+                  <div>
+                    <div className="text-xm text-gray-400">Floors</div>
+                    <div className="text-lg font-semibold text-gray-800">{prediction.number_of_floors}</div>
+                  </div>
+                  <div>
+                    <div className="text-xm text-gray-400">Servant Rooms</div>
+                    <div className="text-lg font-semibold text-gray-800">{prediction.servant_rooms}</div>
+                  </div>
+                  <div>
+                    <div className="text-xm text-gray-400">Store Rooms</div>
+                    <div className="text-lg font-semibold text-gray-800">{prediction.store_rooms}</div>
+                  </div>
+                  <div>
+                    <div className="text-xm text-gray-400">Year Built</div>
+                    <div className="text-lg font-semibold text-gray-800">{prediction.construction_year}</div>
+                  </div>
+                  <div>
+                    <div className="text-xm text-gray-400">Corner Plot</div>
+                    <div className="text-lg font-semibold text-gray-800">
+                      {prediction.is_corner_plot ? (
+                        <span className="text-green-600">✓ Yes</span>
+                      ) : (
+                        <span className="text-red-600">✗ No</span>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-400">Facing Park</div>
+                    <div className="text-lg font-semibold text-gray-800">
+                      {prediction.is_facing_park ? (
+                        <span className="text-green-600">✓ Yes</span>
+                      ) : (
+                        <span className="text-red-600">✗ No</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
-                          <div className="flex flex-wrap gap-2 mb-4">
-                            {prediction.hasGarage && (
-                              <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
-                                🚗 Garage
-                              </span>
-                            )}
-                            {prediction.hasGarden && (
-                              <span className="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">
-                                🌳 Garden
-                              </span>
-                            )}
-                            {prediction.hasRoofAccess && (
-                              <span className="px-3 py-1 bg-purple-100 text-purple-700 text-xs rounded-full font-medium">
-                                🏠 Roof Access
-                              </span>
-                            )}
-                            {prediction.furnished && (
-                              <span className="px-3 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full font-medium">
-                                ✨ Furnished
-                              </span>
-                            )}
-                          </div>
+                {/* Amenities Section */}
+                <div className="mb-4">
+                  <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Amenities</div>
+                  <div className="flex flex-wrap gap-2">
+                    {prediction.furnished && <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs rounded-md">✨ Furnished</span>}
+                    {prediction.hasGarage && <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-md">🚗 Garage</span>}
+                    {prediction.hasGarden && <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-md">🌳 Garden</span>}
+                    {prediction.has_swimming_pool && <span className="px-2 py-1 bg-cyan-100 text-cyan-700 text-xs rounded-md">🏊 Pool</span>}
+                    {prediction.has_gym && <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-md">💪 Gym</span>}
+                    {prediction.has_study_room && <span className="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded-md">📚 Study</span>}
+                    {prediction.has_drawing_room && <span className="px-2 py-1 bg-pink-100 text-pink-700 text-xs rounded-md">🎨 Drawing</span>}
+                    {prediction.has_dining_room && <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-md">🍽️ Dining</span>}
+                    {prediction.has_living_room && <span className="px-2 py-1 bg-teal-100 text-teal-700 text-xs rounded-md">🛋️ Living</span>}
+                    {prediction.has_electricity_backup && <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-md">⚡ Backup</span>}
+                    {prediction.has_lounge_sitting && <span className="px-2 py-1 bg-rose-100 text-rose-700 text-xs rounded-md">🪑 Lounge</span>}
+                    {prediction.has_security && <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-md">🔒 Security</span>}
+                    {prediction.has_servant_quarter && <span className="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded-md">🏠 Servant Qtr</span>}
+                    {prediction.has_roof_access && <span className="px-2 py-1 bg-violet-100 text-violet-700 text-xs rounded-md">🏠 Roof Access</span>}
+                  </div>
+                  {!prediction.furnished && !prediction.hasGarage && !prediction.hasGarden && !prediction.has_swimming_pool && !prediction.has_gym && !prediction.has_study_room && !prediction.has_drawing_room && !prediction.has_dining_room && !prediction.has_living_room && !prediction.has_electricity_backup && !prediction.has_lounge_sitting && !prediction.has_security && !prediction.has_servant_quarter && !prediction.has_roof_access && (
+                    <p className="text-xs text-gray-400 italic">No amenities selected</p>
+                  )}
+                </div>
 
-                          <div className="flex items-center gap-6">
-                            <div>
-                              <div className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
-                                PKR {(prediction.predictedPrice / 10000000).toFixed(2)} Cr
-                              </div>
-                              <div className="text-sm text-gray-500 mt-1">
-                                {(prediction.pricePerMarla / 100000).toFixed(1)} Lakh per Marla
-                              </div>
-                            </div>
-                          </div>
+               {/* Price Section */}
+<div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-100">
+  <div>
+    <div className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+      {formatPriceWithPKR(prediction.predictedPrice)}
+    </div>
+    <div className="text-xs text-gray-500">
+      {formatPrice(prediction.pricePerMarla)} per Marla
+    </div>
+  </div>
+  <div className="text-right">
+    <div className="text-xs text-gray-400">Estimated Range</div>
+    <div className="text-sm font-semibold text-gray-700">
+      {formatPrice(prediction.low_estimate)} - {formatPrice(prediction.high_estimate)}
+    </div>
+    {prediction.confidence_score && (
+      <div className="text-xs text-emerald-600 mt-1">
+        {Math.round(prediction.confidence_score)}% Confidence
+      </div>
+    )}
+  </div>
+</div>
 
-                          <div className="flex items-center gap-2 text-sm text-gray-500 mt-4">
-                            <Calendar className="w-4 h-4" />
-                            {new Date(prediction.date).toLocaleDateString('en-PK', {
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </div>
-                        </div>
-
-                        <motion.button
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          onClick={() => handleDeletePrediction(prediction.id)}
-                          className="ml-4 p-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors"
-                          title="Delete prediction"
-                        >
-                          <Trash2 className="w-6 h-6" />
-                        </motion.button>
-                      </div>
-                    </motion.div>
-                  ))}
-              </AnimatePresence>
-            </div>
-          )}
-        </motion.div>
+                {/* Footer with Date and Delete */}
+                <div className="flex items-center justify-between  pt-1 border-t border-gray-100">
+                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                    <Calendar className="w-3.5 h-3.5" />
+                    {new Date(prediction.date).toLocaleDateString('en-PK', {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </div>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => handleDeletePrediction(prediction.id)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-all text-sm"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+      </AnimatePresence>
+    </div>
+  )}
+</motion.div>
         {/* Forgot Password Modal */}
 <ForgotPasswordModal 
   isOpen={showForgotPassword} 

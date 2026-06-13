@@ -1,5 +1,5 @@
 // src/views/pages/Listing.jsx
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef  } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Filter, MapPin, Bed, Bath, Home as HomeIcon, DollarSign, TrendingUp, X } from 'lucide-react';
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,7 +16,6 @@ export default function Listings() {
     loading,
     error,
     searchQuery,
-    // filters, // ✅ Removed - not used
     selectedArea,
     uniqueAreas,
     priceRange,
@@ -29,6 +28,9 @@ export default function Listings() {
     sortHouses,
     refresh
   } = useHouseListViewModel();
+
+    const pollingIntervalRef = useRef(null);
+
 
   // Local UI state
   const [showFilters, setShowFilters] = useState(false);
@@ -55,7 +57,7 @@ export default function Listings() {
     'https://images.unsplash.com/photo-1768637087224-cffa17561c53?w=500',
   ], []);
 
-  // ✅ Apply filters - stable reference without updateFilters dependency
+  // Apply filters - stable reference without updateFilters dependency
   const applyLocalFilters = useCallback(() => {
     const newFilters = {};
     if (localMinPrice) newFilters.minPrice = parseInt(localMinPrice);
@@ -68,11 +70,11 @@ export default function Listings() {
     if (localHasGarden) newFilters.hasGarden = localHasGarden;
     
     updateFilters(newFilters);
-  // ✅ Removed updateFilters from dependencies to prevent infinite loop
+  // Removed updateFilters from dependencies to prevent infinite loop
   }, [localMinPrice, localMaxPrice, localMinMarla, localMaxMarla, localBedrooms, 
       localFurnished, localHasGarage, localHasGarden]);
 
-  // ✅ Sync local filters with ViewModel filters when cleared from outside
+  // Sync local filters with ViewModel filters when cleared from outside
   useEffect(() => {
     // This runs when clearFilters is called from elsewhere
     if (!localMinPrice && !localMaxPrice && !localMinMarla && !localMaxMarla && 
@@ -81,6 +83,39 @@ export default function Listings() {
     }
     // Optional: sync logic if needed
   }, []);
+   useEffect(() => {
+    // Initial load
+    refresh();
+    
+    pollingIntervalRef.current = setInterval(() => {
+      console.log('Auto-refreshing listings...');
+      refresh();
+    }, 10000); 
+    
+    // Cleanup on component unmount
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []); 
+
+  // In your Listing.jsx, add this right after you get the data:
+useEffect(() => {
+  if (allHouses.length > 0) {
+    const statuses = [...new Set(allHouses.map(house => house.property_status))];
+    console.log('Available property_status values:', statuses);
+    
+    // Also log the sold property to see its exact status
+    const sold = allHouses.filter(house => house.property_status === 'sold');
+    console.log('Properties marked as "sold":', sold.length);
+    
+    // Log all status values
+    allHouses.forEach(house => {
+      console.log(`Property ${house.id}: status = "${house.property_status}"`);
+    });
+  }
+}, [allHouses]);
 
   // Reset all filters
   const resetAllFilters = () => {
@@ -102,10 +137,33 @@ export default function Listings() {
     sortHouses(value);
   }, [sortHouses]);
 
-  const totalProperties = filteredHouses.length;
-  const avgPrice = statistics.avgPrice;
-  const cheapestPrice = statistics.minPrice;
-  const mostExpensivePrice = statistics.maxPrice;
+
+  const availableHouses = allHouses.filter(house => 
+  house.property_status && house.property_status.toLowerCase() !== 'sold'
+);
+
+const maxAvailablePrice = availableHouses.length > 0 
+  ? Math.max(...availableHouses.map(h => h.price))
+  : (statistics.maxPrice || 0);
+
+const totalProperties = statistics.available || filteredHouses.length; 
+const soldProperties = statistics.sold || 0;
+const cheapestPrice = statistics.minPrice;
+const mostExpensivePrice = maxAvailablePrice;
+
+  useEffect(() => {
+    if (allHouses.length > 0) {
+      const statuses = [...new Set(allHouses.map(house => house.property_status))];
+      console.log('Available property_status values:', statuses);
+      
+      const sold = allHouses.filter(house => house.property_status === 'sold');
+      console.log('Properties marked as "sold":', sold.length);
+      
+      allHouses.forEach(house => {
+        console.log(`Property ${house.id}: status = "${house.property_status}"`);
+      });
+    }
+  }, [allHouses]);
 
   // Loading state
   if (loading && allHouses.length === 0) {
@@ -163,9 +221,9 @@ export default function Listings() {
           >
             Browse Properties in Lahore
           </motion.h1>
-          <p className="text-xl text-emerald-100">
+          {/* <p className="text-xl text-emerald-100">
             {totalProperties} properties available • Avg PKR {(avgPrice / 10000000).toFixed(1)} Cr
-          </p>
+          </p> */}
         </div>
       </motion.div>
 
@@ -185,14 +243,14 @@ export default function Listings() {
                 placeholder="Search by title, area, or description..."
                 value={searchQuery}
                 onChange={(e) => updateSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-900 transition-all"
+                className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 caret-emerald-500"
               />
             </div>
             
             <select
               value={sortBy}
               onChange={(e) => handleSort(e.target.value)}
-              className="px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 text-gray-900"
+              className="px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 caret-emerald-500"
             >
               <option value="price_desc">Price: High to Low</option>
               <option value="price_asc">Price: Low to High</option>
@@ -217,163 +275,166 @@ export default function Listings() {
           </div>
 
           {/* Advanced Filters */}
-          <AnimatePresence>
-            {showFilters && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.3 }}
-                className="overflow-hidden"
-              >
-                <div className="mt-6 pt-6 border-t border-gray-200 grid md:grid-cols-3 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Area</label>
-                    <select
-                      value={selectedArea}
-                      onChange={(e) => updateSelectedArea(e.target.value)}
-                      className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 text-gray-900"
-                    >
-                      {uniqueAreas.map((area) => (
-                        <option key={area} value={area}>
-                          {area === 'all' ? 'All Areas' : area}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+         {/* Advanced Filters */}
+<AnimatePresence>
+  {showFilters && (
+    <motion.div
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: 'auto', opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      transition={{ duration: 0.3 }}
+      className="overflow-visible" // Changed from overflow-hidden to overflow-visible
+    >
+      <div className="mt-6 pt-4 border-t border-gray-200">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"> {/* Changed to responsive grid */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Area</label>
+            <select
+              value={selectedArea}
+              onChange={(e) => updateSelectedArea(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 caret-emerald-500 transition-all"
+            >
+              {uniqueAreas.map((area) => (
+                <option key={area} value={area}>
+                  {area === 'all' ? 'All Areas' : area}
+                </option>
+              ))}
+            </select>
+          </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Price Range (PKR)
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="number"
-                        placeholder={`Min ${(priceRange.min / 10000000).toFixed(1)}Cr`}
-                        value={localMinPrice}
-                        onChange={(e) => {
-                          setLocalMinPrice(e.target.value);
-                          setTimeout(() => applyLocalFilters(), 10);
-                        }}
-                        className="w-1/2 px-3 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 text-gray-900"
-                      />
-                      <input
-                        type="number"
-                        placeholder={`Max ${(priceRange.max / 10000000).toFixed(1)}Cr`}
-                        value={localMaxPrice}
-                        onChange={(e) => {
-                          setLocalMaxPrice(e.target.value);
-                          setTimeout(() => applyLocalFilters(), 10);
-                        }}
-                        className="w-1/2 px-3 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 text-gray-900"
-                      />
-                    </div>
-                  </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Price Range (PKR)
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                placeholder={`Min ${(priceRange.min / 10000000).toFixed(1)}Cr`}
+                value={localMinPrice}
+                onChange={(e) => {
+                  setLocalMinPrice(e.target.value);
+                  setTimeout(() => applyLocalFilters(), 10);
+                }}
+                className="w-1/2 px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 caret-emerald-500 transition-all"
+              />
+              <input
+                type="number"
+                placeholder={`Max ${(priceRange.max / 10000000).toFixed(1)}Cr`}
+                value={localMaxPrice}
+                onChange={(e) => {
+                  setLocalMaxPrice(e.target.value);
+                  setTimeout(() => applyLocalFilters(), 10);
+                }}
+                className="w-1/2 px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 caret-emerald-500 transition-all"
+              />
+            </div>
+          </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Bedrooms
-                    </label>
-                    <input
-                      type="number"
-                      placeholder="Min Bedrooms"
-                      value={localBedrooms}
-                      onChange={(e) => {
-                        setLocalBedrooms(e.target.value);
-                        setTimeout(() => applyLocalFilters(), 10);
-                      }}
-                      className="w-full px-3 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 text-gray-900"
-                    />
-                  </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Bedrooms
+            </label>
+            <input
+              type="number"
+              placeholder="Min Bedrooms"
+              value={localBedrooms}
+              onChange={(e) => {
+                setLocalBedrooms(e.target.value);
+                setTimeout(() => applyLocalFilters(), 10);
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 caret-emerald-500 transition-all"
+            />
+          </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Marla Size
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="number"
-                        placeholder={`Min ${marlaRange.min}`}
-                        value={localMinMarla}
-                        onChange={(e) => {
-                          setLocalMinMarla(e.target.value);
-                          setTimeout(() => applyLocalFilters(), 10);
-                        }}
-                        className="w-1/2 px-3 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 text-gray-900"
-                      />
-                      <input
-                        type="number"
-                        placeholder={`Max ${marlaRange.max}`}
-                        value={localMaxMarla}
-                        onChange={(e) => {
-                          setLocalMaxMarla(e.target.value);
-                          setTimeout(() => applyLocalFilters(), 10);
-                        }}
-                        className="w-1/2 px-3 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 text-gray-900"
-                      />
-                    </div>
-                  </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Marla Size
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                placeholder={`Min ${marlaRange.min}`}
+                value={localMinMarla}
+                onChange={(e) => {
+                  setLocalMinMarla(e.target.value);
+                  setTimeout(() => applyLocalFilters(), 10);
+                }}
+                className="w-1/2 px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 caret-emerald-500 transition-all"
+              />
+              <input
+                type="number"
+                placeholder={`Max ${marlaRange.max}`}
+                value={localMaxMarla}
+                onChange={(e) => {
+                  setLocalMaxMarla(e.target.value);
+                  setTimeout(() => applyLocalFilters(), 10);
+                }}
+                className="w-1/2 px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 caret-emerald-500 transition-all"
+              />
+            </div>
+          </div>
 
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Features
-                    </label>
-                    <div className="flex flex-wrap gap-4">
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={localFurnished}
-                          onChange={(e) => {
-                            setLocalFurnished(e.target.checked);
-                            setTimeout(() => applyLocalFilters(), 10);
-                          }}
-                          className="w-4 h-4 text-emerald-600 rounded"
-                        />
-                        <span className="text-sm">Furnished</span>
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={localHasGarage}
-                          onChange={(e) => {
-                            setLocalHasGarage(e.target.checked);
-                            setTimeout(() => applyLocalFilters(), 10);
-                          }}
-                          className="w-4 h-4 text-emerald-600 rounded"
-                        />
-                        <span className="text-sm">Garage</span>
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={localHasGarden}
-                          onChange={(e) => {
-                            setLocalHasGarden(e.target.checked);
-                            setTimeout(() => applyLocalFilters(), 10);
-                          }}
-                          className="w-4 h-4 text-emerald-600 rounded"
-                        />
-                        <span className="text-sm">Garden</span>
-                      </label>
-                    </div>
-                  </div>
+          <div className="lg:col-span-1"> {/* Changed from md:col-span-2 */}
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Features
+            </label>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={localFurnished}
+                  onChange={(e) => {
+                    setLocalFurnished(e.target.checked);
+                    setTimeout(() => applyLocalFilters(), 10);
+                  }}
+                  className="w-4 h-4 text-emerald-600 rounded focus:ring-2 focus:ring-emerald-500"
+                />
+                <span className="text-sm">Furnished</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={localHasGarage}
+                  onChange={(e) => {
+                    setLocalHasGarage(e.target.checked);
+                    setTimeout(() => applyLocalFilters(), 10);
+                  }}
+                  className="w-4 h-4 text-emerald-600 rounded focus:ring-2 focus:ring-emerald-500"
+                />
+                <span className="text-sm">Garage</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={localHasGarden}
+                  onChange={(e) => {
+                    setLocalHasGarden(e.target.checked);
+                    setTimeout(() => applyLocalFilters(), 10);
+                  }}
+                  className="w-4 h-4 text-emerald-600 rounded focus:ring-2 focus:ring-emerald-500"
+                />
+                <span className="text-sm">Garden</span>
+              </label>
+            </div>
+          </div>
 
-                  <div className="md:col-span-3 flex justify-between items-center">
-                    <button
-                      onClick={resetAllFilters}
-                      className="text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-2"
-                    >
-                      <X className="w-4 h-4" />
-                      Clear All Filters
-                    </button>
-                    <span className="text-sm text-gray-600">
-                      {filteredHouses.length} properties found
-                    </span>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <div className="md:col-span-2 lg:col-span-3 flex flex-col sm:flex-row justify-between items-center gap-4 pt-2">
+            <button
+              onClick={resetAllFilters}
+              className="text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-2 transition-colors"
+            >
+              <X className="w-4 h-4" />
+              Clear All Filters
+            </button>
+            <span className="text-sm text-gray-600">
+              {filteredHouses.length} properties found
+            </span>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  )}
+</AnimatePresence>
         </motion.div>
 
         {/* Stats Bar */}
@@ -396,19 +457,17 @@ export default function Listings() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-lg p-4 border-2 border-blue-100">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <TrendingUp className="w-6 h-6 text-blue-600" />
-                </div>
-                <div>
-                  <div className="text-sm text-gray-600">Avg Price</div>
-                  <div className="text-2xl font-bold text-gray-900">
-                    {(avgPrice / 10000000).toFixed(1)} Cr
-                  </div>
-                </div>
-              </div>
-            </div>
+           <div className="bg-white rounded-xl shadow-lg p-4 border-2 border-red-100">
+      <div className="flex items-center gap-3">
+        <div className="p-3 bg-red-100 rounded-lg">
+          <TrendingUp className="w-6 h-6 text-red-600" />
+        </div>
+        <div>
+          <div className="text-sm text-gray-600">Sold Properties</div>
+          <div className="text-2xl font-bold text-gray-900">{soldProperties}</div>
+        </div>
+      </div>
+    </div>
 
             <div className="bg-white rounded-xl shadow-lg p-4 border-2 border-green-100">
               <div className="flex items-center gap-3">
@@ -453,7 +512,7 @@ export default function Listings() {
           {filteredHouses.length === 0 ? (
   allHouses.length === 0 ? (
     // Case 1: No properties in database at all
-    <div className="text-center py-16 bg-white rounded-2xl shadow-lg">
+    <div className="text-center py-16 rounded-2xl ">
       <div className="inline-block mb-4">
         <HomeIcon className="w-20 h-20 text-gray-400 mx-auto" />
       </div>
@@ -462,7 +521,7 @@ export default function Listings() {
     </div>
   ) : (
     // Case 2: Filters applied but no matches
-    <div className="text-center py-16 bg-white rounded-2xl shadow-lg">
+    <div className="text-center py-16  rounded-2xl ">
       <div className="inline-block mb-4">
         <HomeIcon className="w-20 h-20 text-gray-400 mx-auto" />
       </div>
@@ -476,7 +535,7 @@ export default function Listings() {
     </div>
   )
 ) : (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
               {filteredHouses.map((house, index) => (
                 <motion.div
                   key={house.id}
@@ -490,38 +549,39 @@ export default function Listings() {
                     to={`/house/${house.id}`}
                     className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all overflow-hidden block"
                   >
-                    <div className="relative h-56 bg-gray-200 overflow-hidden">
+                    <div className="relative h-48 bg-gray-200 overflow-hidden">
                       <motion.div
                         whileHover={{ scale: 1.1 }}
                         transition={{ duration: 0.3 }}
                         className="w-full h-full"
                       >
-                        <ImageWithFallback
-                          src={imageUrls[index % imageUrls.length]}
-                          alt={house.title}
-                          className="w-full h-full object-cover"
-                        />
+                            <ImageWithFallback
+      src={house.primary_image || imageUrls[index % imageUrls.length]}
+      alt={house.title}
+      className="w-full h-full object-contain"
+      fallbackSrc={imageUrls[index % imageUrls.length]}
+    />
                       </motion.div>
-                      <div className="absolute top-4 right-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-4 py-2 rounded-full text-sm font-semibold shadow-lg">
+                      <div className="absolute top-2 right-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-4 py-2 rounded-full text-sm font-semibold shadow-lg">
                         {house.marla} Marla
                       </div>
-                      {house.yearBuilt >= 2023 && (
+                      {house.yearBuilt >= 2025 && (
                         <div className="absolute top-4 left-4 bg-yellow-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg">
                           NEW
                         </div>
                       )}
                     </div>
 
-                    <div className="p-6">
-                      <h3 className="font-bold text-xl text-gray-900 mb-2 group-hover:text-emerald-600 transition-colors line-clamp-1">
+                    <div className="p-4">
+                      <h3 className="font-bold text-xl text-gray-900 mb-1 group-hover:text-emerald-600 transition-colors line-clamp-1">
                         {house.title}
                       </h3>
-                      <div className="flex items-center gap-2 text-gray-600 mb-4">
+                      <div className="flex items-center gap-2 text-gray-600 mb-2">
                         <MapPin className="w-4 h-4 text-emerald-600" />
-                        <span className="text-sm">{house.area}</span>
+                        <span className="text-sm">{house.location_name }</span>
                       </div>
 
-                      <div className="flex items-center gap-6 text-sm text-gray-600 mb-4">
+                      <div className="flex items-center gap-6 text-sm text-gray-600 mb-2">
                         <div className="flex items-center gap-2">
                           <Bed className="w-5 h-5 text-emerald-600" />
                           <span className="font-medium">{house.bedrooms} Bed</span>
@@ -532,8 +592,8 @@ export default function Listings() {
                         </div>
                       </div>
 
-                      <div className="pt-4 border-t border-gray-200">
-                        <div className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+                      <div className="pt-2 border-t border-gray-200">
+                        <div className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
                           PKR {(house.price / 10000000).toFixed(1)} Cr
                         </div>
                         <div className="text-sm text-gray-500 mt-1">
