@@ -1,11 +1,10 @@
-// src/views/pages/Home.jsx
 import { Link } from 'react-router-dom';
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'; 
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import { 
   TrendingUp, Home as HomeIcon, Search, BarChart3, Users, Award, 
   Building2, ArrowRight, Sparkles, MapPin, Zap, Shield, Star, 
-  ChevronRight, Bed, Bath, Eye, Heart, Clock, CheckCircle
+  ChevronRight, Bed, Bath, Eye, Heart, Clock, CheckCircle, Ruler, LandPlot
 } from 'lucide-react';
 import { Navbar } from '../components/navbar';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
@@ -13,7 +12,7 @@ import { useHouseListViewModel } from '../../viewmodels/useHouseListViewModel.js
 import { toast, Toaster } from 'sonner';
 
 export default function Home() {
-  //  KEEP YOUR ORIGINAL API CALL
+  // Keep your original API call
   const { houses, loading, error } = useHouseListViewModel();
   
   // State declarations
@@ -27,9 +26,22 @@ export default function Home() {
   const { scrollYProgress } = useScroll();
   const y = useTransform(scrollYProgress, [0, 1], [0, -50]);
   
-  // Featured houses (first 8) - FROM YOUR API
+  // Featured houses (first 8)
   const displayedHouses = houses.slice(0, 8);
   const hasNoHouses = houses.length === 0;
+  
+  // Format number function - shows 100 Lac instead of 1 Cr
+  const formatNumber = (num) => {
+    if (!num) return 'PKR 0';
+    if (num === 10000000) return 'PKR 100 Lac';
+    if (num > 10000000) return `PKR ${(num / 10000000).toFixed(1)} Cr`;
+    if (num >= 100000) return `PKR ${(num / 100000).toFixed(1)} Lac`;
+    return `PKR ${num.toLocaleString()}`;
+  };
+  
+  // Helper functions to check property type
+  const isPlot = (property) => property.property_type === 'plot';
+  const isHouse = (property) => property.property_type === 'house';
   
   const imageUrls = [
     'https://images.unsplash.com/photo-1622015663381-d2e05ae91b72?w=500',
@@ -42,7 +54,7 @@ export default function Home() {
     'https://images.unsplash.com/photo-1768637087224-cffa17561c53?w=500',
   ];
   
-  // Filter houses by category - USING YOUR API DATA
+  // Filter houses by category
   const filteredHouses = selectedCategory === 'all' 
     ? displayedHouses 
     : selectedCategory === 'luxury'
@@ -51,44 +63,48 @@ export default function Home() {
     ? displayedHouses.filter(h => h.price <= 30000000)
     : displayedHouses.filter(h => h.price > 30000000 && h.price <= 50000000);
   
-const getHouseImage = (house, index) => {
-  //  Now primary_image will be available!
-  if (house.primary_image) {
-    return house.primary_image;
-  }
+  const getHouseImage = (house, index) => {
+    if (house.primary_image) {
+      return house.primary_image;
+    }
+    
+    const fallbackImages = [
+      'https://images.unsplash.com/photo-1622015663381-d2e05ae91b72?w=600&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1668911495278-487418f8f72d?w=600&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1721815693498-cc28507c0ba2?w=600&h=400&fit=crop',
+    ];
+    
+    return fallbackImages[house.id % fallbackImages.length];
+  };
   
-  // Fallback images
-  const fallbackImages = [
-    'https://images.unsplash.com/photo-1622015663381-d2e05ae91b72?w=600&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1668911495278-487418f8f72d?w=600&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1721815693498-cc28507c0ba2?w=600&h=400&fit=crop',
-  ];
+  const ImageWithFallback = ({ src, alt, className, fallbackSrc }) => {
+    const [imgSrc, setImgSrc] = useState(src);
+    
+    useEffect(() => {
+      setImgSrc(src);
+    }, [src]);
+    
+    return (
+      <img
+        src={imgSrc}
+        alt={alt}
+        className={className}
+        onError={() => {
+          console.log('Image failed to load:', imgSrc);
+          if (fallbackSrc) {
+            setImgSrc(fallbackSrc);
+          }
+        }}
+      />
+    );
+  };
   
-  return fallbackImages[house.id % fallbackImages.length];
-};
-// If you don't have this component, create it or use regular img tag
-const ImageWithFallback = ({ src, alt, className, fallbackSrc }) => {
-  const [imgSrc, setImgSrc] = useState(src);
-  
-  useEffect(() => {
-    setImgSrc(src);
-  }, [src]);
-  
-  return (
-    <img
-      src={imgSrc}
-      alt={alt}
-      className={className}
-      onError={() => {
-        console.log('Image failed to load:', imgSrc);
-        if (fallbackSrc) {
-          setImgSrc(fallbackSrc);
-        }
-      }}
-    />
-  );
-};
+  const toggleLike = (id) => {
+    setLikedHouses(prev => 
+      prev.includes(id) ? prev.filter(houseId => houseId !== id) : [...prev, id]
+    );
+  };
   
   // Mouse move effect
   useEffect(() => {
@@ -132,7 +148,7 @@ const ImageWithFallback = ({ src, alt, className, fallbackSrc }) => {
     { name: 'Usman Tariq', role: 'Investor', text: 'Historical data insights helped me make informed investment decisions. Highly recommended!' },
   ];
   
-  // Loading state - FROM YOUR API
+  // Loading state
   if (loading && houses.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-emerald-50 to-teal-50">
@@ -147,7 +163,7 @@ const ImageWithFallback = ({ src, alt, className, fallbackSrc }) => {
     );
   }
   
-  // Error state - FROM YOUR API
+  // Error state
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-emerald-50 to-teal-50">
@@ -193,7 +209,6 @@ const ImageWithFallback = ({ src, alt, className, fallbackSrc }) => {
         className="relative overflow-hidden bg-gradient-to-r from-emerald-600 via-emerald-700 to-teal-700 text-white"
         style={{ y }}
       >
-        {/* Animated background patterns */}
         <div className="absolute inset-0 opacity-10">
           {[...Array(5)].map((_, i) => (
             <motion.div
@@ -219,8 +234,8 @@ const ImageWithFallback = ({ src, alt, className, fallbackSrc }) => {
           ))}
         </div>
         
-<div className="relative z-10 max-w-7xl mx-auto px-4 pt-9 pb-18 md:pt-13 md:pb-26">
-            <motion.div
+        <div className="relative z-10 max-w-7xl mx-auto px-4 pt-9 pb-18 md:pt-13 md:pb-26">
+          <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
@@ -445,259 +460,281 @@ const ImageWithFallback = ({ src, alt, className, fallbackSrc }) => {
       </div>
       
       {/* Featured Properties Section */}
-     {/* Featured Properties Section */}
-<div className="max-w-7xl mx-auto px-4 py-20">
-  <motion.div
-    initial={{ opacity: 0, y: 30 }}
-    whileInView={{ opacity: 1, y: 0 }}
-    viewport={{ once: true }}
-    transition={{ duration: 0.6 }}
-    className="text-center mb-12"
-  >
-    <motion.div
-      animate={{ rotate: [0, 360] }}
-      transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-      className="inline-block mb-4"
-    >
-      <HomeIcon className="w-12 h-12 text-emerald-600" />
-    </motion.div>
-    <h2 className="text-5xl font-bold text-gray-900 mb-4">Featured Properties</h2>
-    <p className="text-2xl text-gray-600 mb-8">Discover our hand-picked premium homes in Lahore</p>
-    
-    {/* Category Filter */}
-    <div className="flex flex-wrap justify-center gap-4">
-      {[
-        { id: 'all', label: 'All Properties', icon: Building2 },
-        { id: 'luxury', label: 'Luxury', icon: Award },
-        { id: 'mid-range', label: 'Mid-Range', icon: HomeIcon },
-        { id: 'affordable', label: 'Affordable', icon: TrendingUp },
-      ].map((category) => (
-        <motion.button
-          key={category.id}
-          whileHover={{ scale: 1.05, y: -3 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setSelectedCategory(category.id)}
-          className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all ${
-            selectedCategory === category.id
-              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-xl'
-              : 'bg-white text-gray-700 hover:bg-emerald-50 shadow-md'
-          }`}
-        >
-          <category.icon className="w-5 h-5" />
-          {category.label}
-        </motion.button>
-      ))}
-    </div>
-  </motion.div>
-  {/* Show message when filtered properties are empty */}
-{!hasNoHouses && filteredHouses.length === 0 && (
-  <div className="text-center rounded-2xl">
-    <motion.div
-      animate={{ y: [0, -10, 0] }}
-      transition={{ duration: 2, repeat: Infinity }}
-      className="inline-block mb-4"
-    >
-      <HomeIcon className="w-20 h-20 text-gray-400 mx-auto" />
-    </motion.div>
-    <p className="text-gray-500 text-2xl mb-2">
-      No {selectedCategory === 'all' ? 'properties' : selectedCategory} properties found
-    </p>
-    <p className="text-gray-400 ">
-      {selectedCategory === 'all' 
-        ? 'No properties are available at the moment' 
-        : `Try selecting a different category`}
-    </p>
-  
-  </div>
-)}
-  
-  {/* Show when NO properties available */}
-  {hasNoHouses && (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="text-center py-16 bg-white rounded-2xl shadow-lg"
-    >
-      <motion.div
-        animate={{ y: [0, -10, 0] }}
-        transition={{ duration: 2, repeat: Infinity }}
-        className="inline-block mb-4"
-      >
-        <HomeIcon className="w-20 h-20 text-gray-400 mx-auto" />
-      </motion.div>
-      <p className="text-gray-500 text-2xl mb-2">No properties available</p>
-      <p className="text-gray-400">Check back later for new listings</p>
-    </motion.div>
-  )}
-  
-  {/* Show when properties ARE available */}
-  {!hasNoHouses && (
-    <>
-      {/* Properties Grid */}
-      <AnimatePresence mode="wait">
+      <div className="max-w-7xl mx-auto px-4 py-20">
         <motion.div
-          key={selectedCategory}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
-          transition={{ duration: 0.5 }}
-          className="grid md:grid-cols-2 lg:grid-cols-4 gap-8"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="text-center mb-12"
         >
-          {filteredHouses.map((house, index) => (
-            <motion.div
-              key={house.id}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.4, delay: index * 0.1 }}
-              whileHover={{ y: -15, scale: 1.02 }}
-              className="group relative"
-            >
-              <div className="bg-white rounded-3xl shadow-xl hover:shadow-2xl transition-all overflow-hidden border-2 border-emerald-100">
-                {/* Image Section */}
-                <div className="relative h-48 overflow-hidden">
-                  <motion.div
-                    whileHover={{ scale: 1.15 }}
-                    transition={{ duration: 0.5 }}
-                    className="w-full h-full"
-                  >
-          <img
-  src={getHouseImage(house, index)}
-  alt={house.title}
-  className="w-full h-full object-contain"
-  onError={(e) => {
-    console.error('Image failed to load:', e.target.src);
-    e.target.src = 'https://images.unsplash.com/photo-1622015663381-d2e05ae91b72?w=600&h=400&fit=crop';
-  }}
-/>
-                  </motion.div>
-                  
-                  {/* Overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="absolute bottom-4 left-4 right-4 flex justify-between items-center">
-                      <Link to={`/house/${house.id}`}>
-                        <motion.button
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          className="flex items-center gap-2 px-4 py-2 bg-white text-emerald-700 rounded-xl font-semibold shadow-lg"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View Details
-                        </motion.button>
-                      </Link>
-                      <motion.button
-                        whileHover={{ scale: 1.2, rotate: 10 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          toggleLike(house.id);
-                        }}
-                        className={`p-3 rounded-full shadow-lg transition-all ${
-                          likedHouses.includes(house.id)
-                            ? 'bg-red-500 text-white'
-                            : 'bg-white text-gray-700'
-                        }`}
-                      >
-                        <Heart className={`w-5 h-5 ${likedHouses.includes(house.id) ? 'fill-current' : ''}`} />
-                      </motion.button>
-                    </div>
-                  </div>
-                  
-                  {/* Badge */}
-                  <motion.div
-                    initial={{ x: -100 }}
-                    animate={{ x: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="absolute top-2 right-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-4 py-2 rounded-full font-bold shadow-xl"
-                  >
-                    {house.marla} Marla
-                  </motion.div>
-                  
-                  {/* "NEW" badge */}
-                  {house.yearBuilt && house.yearBuilt >= 2025 && (
-                    <motion.div
-                      animate={{ scale: [1, 1.1, 1] }}
-                      transition={{ duration: 1.5, repeat: Infinity }}
-                      className="absolute top-4 left-4 bg-yellow-500 text-white px-3 py-1 rounded-full text-sm font-bold shadow-lg"
-                    >
-                      NEW
-                    </motion.div>
-                  )}
-                </div>
-                
-                {/* Content Section */}
-                <div className="p-4">
-                  <h3 className="font-bold text-xl text-gray-900 mb-1 group-hover:text-emerald-600 transition-colors line-clamp-1">
-                    {house.title}
-                  </h3>
-                  
-                  <div className="flex items-center gap-2 text-gray-600 mb-2">
-                    <MapPin className="w-4 h-4 text-emerald-600" />
-                    <span className="text-sm font-medium">{house.location_name }</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-6 text-sm text-gray-600 mb-2">
-                    <motion.div whileHover={{ scale: 1.1 }} className="flex items-center gap-2">
-                      <Bed className="w-5 h-5 text-emerald-600" />
-                      <span className="font-medium">{house.bedrooms}</span>
-                    </motion.div>
-                    <motion.div whileHover={{ scale: 1.1 }} className="flex items-center gap-2">
-                      <Bath className="w-5 h-5 text-teal-600" />
-                      <span className="font-medium">{house.bathrooms}</span>
-                    </motion.div>
-                    {house.yearBuilt && (
-                      <motion.div whileHover={{ scale: 1.1 }} className="flex items-center gap-2">
-                        <Clock className="w-5 h-5 text-blue-600" />
-                        <span className="font-medium">{house.yearBuilt}</span>
-                      </motion.div>
-                    )}
-                  </div>
-                  
-                  <div className="pt-2 border-t border-gray-200">
-                    <motion.div 
-                      whileHover={{ scale: 1.05 }}
-                      className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent"
-                    >
-                      PKR {(house.price / 10000000).toFixed(1)} Cr
-                    </motion.div>
-                    <div className="text-sm text-gray-500 mt-1">
-                      {(house.pricePerMarla / 100000).toFixed(1)} Lakh per Marla
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </motion.div>
-      </AnimatePresence>
-      
-      {/* View All Button */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ delay: 0.5 }}
-        className="text-center mt-12"
-      >
-        <Link to="/listings">
-          <motion.button
-            whileHover={{ scale: 1.1, y: -5 }}
-            whileTap={{ scale: 0.95 }}
-            className="px-10 py-5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-2xl font-bold text-lg shadow-2xl hover:shadow-emerald-500/50 transition-all flex items-center gap-3 mx-auto"
+          <motion.div
+            animate={{ rotate: [0, 360] }}
+            transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+            className="inline-block mb-4"
           >
-            View All Properties
+            <HomeIcon className="w-12 h-12 text-emerald-600" />
+          </motion.div>
+          <h2 className="text-5xl font-bold text-gray-900 mb-4">Featured Properties</h2>
+          <p className="text-2xl text-gray-600 mb-8">Discover our hand-picked premium homes in Lahore</p>
+          
+          {/* Category Filter */}
+          <div className="flex flex-wrap justify-center gap-4">
+            {[
+              { id: 'all', label: 'All Properties', icon: Building2 },
+              { id: 'luxury', label: 'Luxury', icon: Award },
+              { id: 'mid-range', label: 'Mid-Range', icon: HomeIcon },
+              { id: 'affordable', label: 'Affordable', icon: TrendingUp },
+            ].map((category) => (
+              <motion.button
+                key={category.id}
+                whileHover={{ scale: 1.05, y: -3 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setSelectedCategory(category.id)}
+                className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all ${
+                  selectedCategory === category.id
+                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-xl'
+                    : 'bg-white text-gray-700 hover:bg-emerald-50 shadow-md'
+                }`}
+              >
+                <category.icon className="w-5 h-5" />
+                {category.label}
+              </motion.button>
+            ))}
+          </div>
+        </motion.div>
+        
+        {/* Show message when filtered properties are empty */}
+        {!hasNoHouses && filteredHouses.length === 0 && (
+          <div className="text-center rounded-2xl">
             <motion.div
-              animate={{ x: [0, 5, 0] }}
-              transition={{ duration: 1.5, repeat: Infinity }}
+              animate={{ y: [0, -10, 0] }}
+              transition={{ duration: 2, repeat: Infinity }}
+              className="inline-block mb-4"
             >
-              <ArrowRight className="w-6 h-6" />
+              <HomeIcon className="w-20 h-20 text-gray-400 mx-auto" />
             </motion.div>
-          </motion.button>
-        </Link>
-      </motion.div>
-    </>
-  )}
-</div>
+            <p className="text-gray-500 text-2xl mb-2">
+              No {selectedCategory === 'all' ? 'properties' : selectedCategory} properties found
+            </p>
+            <p className="text-gray-400">
+              {selectedCategory === 'all' 
+                ? 'No properties are available at the moment' 
+                : `Try selecting a different category`}
+            </p>
+          </div>
+        )}
+        
+        {/* Show when NO properties available */}
+        {hasNoHouses && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="text-center py-16 bg-white rounded-2xl shadow-lg"
+          >
+            <motion.div
+              animate={{ y: [0, -10, 0] }}
+              transition={{ duration: 2, repeat: Infinity }}
+              className="inline-block mb-4"
+            >
+              <HomeIcon className="w-20 h-20 text-gray-400 mx-auto" />
+            </motion.div>
+            <p className="text-gray-500 text-2xl mb-2">No properties available</p>
+            <p className="text-gray-400">Check back later for new listings</p>
+          </motion.div>
+        )}
+        
+        {/* Show when properties ARE available */}
+        {!hasNoHouses && (
+          <>
+            {/* Properties Grid */}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={selectedCategory}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.5 }}
+                className="grid md:grid-cols-2 lg:grid-cols-4 gap-8"
+              >
+                {filteredHouses.map((house, index) => {
+                  const isPlotProperty = isPlot(house);
+                  const isHouseProperty = isHouse(house);
+                  
+                  return (
+                    <motion.div
+                      key={house.id}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.4, delay: index * 0.1 }}
+                      whileHover={{ y: -15, scale: 1.02 }}
+                      className="group relative"
+                    >
+                      <div className="bg-white rounded-3xl shadow-xl hover:shadow-2xl transition-all overflow-hidden border-2 border-emerald-100">
+                        {/* Image Section */}
+                        <div className="relative h-48 overflow-hidden">
+                          <motion.div
+                            whileHover={{ scale: 1.15 }}
+                            transition={{ duration: 0.5 }}
+                            className="w-full h-full"
+                          >
+                            <img
+                              src={getHouseImage(house, index)}
+                              alt={house.title}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                console.error('Image failed to load:', e.target.src);
+                                e.target.src = 'https://images.unsplash.com/photo-1622015663381-d2e05ae91b72?w=600&h=400&fit=crop';
+                              }}
+                            />
+                          </motion.div>
+                          
+                          {/* Overlay */}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="absolute bottom-4 left-4 right-4 flex justify-between items-center">
+                              <Link to={`/house/${house.id}`}>
+                                <motion.button
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  className="flex items-center gap-2 px-4 py-2 bg-white text-emerald-700 rounded-xl font-semibold shadow-lg"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  View Details
+                                </motion.button>
+                              </Link>
+                              <motion.button
+                                whileHover={{ scale: 1.2, rotate: 10 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  toggleLike(house.id);
+                                }}
+                                className={`p-3 rounded-full shadow-lg transition-all ${
+                                  likedHouses.includes(house.id)
+                                    ? 'bg-red-500 text-white'
+                                    : 'bg-white text-gray-700'
+                                }`}
+                              >
+                                <Heart className={`w-5 h-5 ${likedHouses.includes(house.id) ? 'fill-current' : ''}`} />
+                              </motion.button>
+                            </div>
+                          </div>
+                          
+                          {/* Size Badge */}
+                          <motion.div
+                            initial={{ x: -100 }}
+                            animate={{ x: 0 }}
+                            transition={{ delay: index * 0.1 }}
+                            className="absolute top-2 right-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-4 py-2 rounded-full font-bold shadow-xl"
+                          >
+                            {house.marla} Marla
+                          </motion.div>
+                          
+                          {/* "NEW" badge - only for houses */}
+                          {isHouseProperty && house.yearBuilt && house.yearBuilt >= 2025 && (
+                            <motion.div
+                              animate={{ scale: [1, 1.1, 1] }}
+                              transition={{ duration: 1.5, repeat: Infinity }}
+                              className="absolute top-4 left-4 bg-yellow-500 text-white px-3 py-1 rounded-full text-sm font-bold shadow-lg"
+                            >
+                              NEW
+                            </motion.div>
+                          )}
+                        </div>
+                        
+                        {/* Content Section */}
+                        <div className="p-4">
+                          <h3 className="font-bold text-xl text-gray-900 mb-1 group-hover:text-emerald-600 transition-colors line-clamp-1">
+                            {house.title}
+                          </h3>
+                          
+                          <div className="flex items-center gap-2 text-gray-600 mb-2">
+                            <MapPin className="w-4 h-4 text-emerald-600" />
+                            <span className="text-sm font-medium">{house.location_name}</span>
+                          </div>
+                          
+                          {/* House-specific details */}
+                          {isHouseProperty && (
+                            <div className="flex items-center gap-6 text-sm text-gray-600 mb-2">
+                              <motion.div whileHover={{ scale: 1.1 }} className="flex items-center gap-2">
+                                <Bed className="w-5 h-5 text-emerald-600" />
+                                <span className="font-medium">{house.bedrooms}</span>
+                              </motion.div>
+                              <motion.div whileHover={{ scale: 1.1 }} className="flex items-center gap-2">
+                                <Bath className="w-5 h-5 text-emerald-600" />
+                                <span className="font-medium">{house.bathrooms}</span>
+                              </motion.div>
+                              {house.yearBuilt && (
+                                <motion.div whileHover={{ scale: 1.1 }} className="flex items-center gap-2">
+                                  <Clock className="w-5 h-5 text-blue-600" />
+                                  <span className="font-medium">{house.yearBuilt}</span>
+                                </motion.div>
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* Plot-specific details */}
+                          {isPlotProperty && (
+                            <div className="flex items-center gap-6 text-sm text-gray-600 mb-2">
+                              <motion.div whileHover={{ scale: 1.1 }} className="flex items-center gap-2">
+                                <Ruler className="w-5 h-5 text-emerald-600" />
+                                <span className="font-medium">{house.marla} Marla Residential Plot</span>
+                              </motion.div>
+                              {/* <motion.div whileHover={{ scale: 1.1 }} className="flex items-center gap-2">
+                                <LandPlot className="w-5 h-5 text-purple-600" />
+                                <span className="font-medium">Residential Plot</span>
+                              </motion.div> */}
+                            </div>
+                          )}
+                          
+                          <div className="pt-2 border-t border-gray-200">
+                            <motion.div 
+                              whileHover={{ scale: 1.05 }}
+                              className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent"
+                            >
+                              {formatNumber(house.price)}
+                            </motion.div>
+                            <div className="text-sm text-gray-500 mt-1">
+                              {formatNumber(house.pricePerMarla)} per Marla
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </motion.div>
+            </AnimatePresence>
+            
+            {/* View All Button */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.5 }}
+              className="text-center mt-12"
+            >
+              <Link to="/listings">
+                <motion.button
+                  whileHover={{ scale: 1.1, y: -5 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="px-10 py-5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-2xl font-bold text-lg shadow-2xl hover:shadow-emerald-500/50 transition-all flex items-center gap-3 mx-auto"
+                >
+                  View All Properties
+                  <motion.div
+                    animate={{ x: [0, 5, 0] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  >
+                    <ArrowRight className="w-6 h-6" />
+                  </motion.div>
+                </motion.button>
+              </Link>
+            </motion.div>
+          </>
+        )}
+      </div>
+      
       {/* Testimonials Section */}
       <div className="bg-gradient-to-r from-emerald-600 via-emerald-700 to-teal-700 py-20">
         <div className="max-w-7xl mx-auto px-4">
@@ -835,7 +872,6 @@ const ImageWithFallback = ({ src, alt, className, fallbackSrc }) => {
           transition={{ duration: 0.6 }}
           className="bg-gradient-to-r from-emerald-600 via-emerald-700 to-teal-700 rounded-[3rem] p-16 text-center text-white shadow-2xl relative overflow-hidden"
         >
-          {/* Animated background */}
           <div className="absolute inset-0 opacity-20">
             {[...Array(20)].map((_, i) => (
               <motion.div
